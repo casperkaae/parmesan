@@ -24,7 +24,7 @@ tests_require = [
     ]
 
 setup(
-    name="Parmasan",
+    name="Parmesan",
     version=version,
     description="A lightweight library to build Variational Neural Networks in Theano",
     long_description="\n\n".join([README, CHANGES]),
@@ -40,8 +40,8 @@ setup(
         ],
     keywords="",
     author="Parmasan contributors",
-    author_email="lasagne_cgt-users@googlegroups.com",
-    url="https://github.com/Parmasan/Parmasan",
+    author_email="parmesan-users@googlegroups.com",
+    url="https://github.com/casperkaae/parmesan",
     license="MIT",
     packages=find_packages(),
     include_package_data=False,
