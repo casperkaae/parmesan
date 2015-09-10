@@ -2,7 +2,4 @@
 *.pyc
 Parmasan.egg-info/
 examples/results/
-
-examples/results/vae_vanilla/logfile.log
-
 *.log
