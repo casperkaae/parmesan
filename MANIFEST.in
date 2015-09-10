@@ -1,0 +1,8 @@
+include *.rst
+include *.txt
+include LICENSE
+
+recursive-include examples *.py
+
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]

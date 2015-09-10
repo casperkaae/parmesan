@@ -1,0 +1,3 @@
+git+https://github.com/Theano/Theano.git@15c90dd3#egg=Theano==0.8.git
+git+https://github.com/Lasagne/Lasagne.git
+
