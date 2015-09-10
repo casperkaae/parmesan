@@ -3,3 +3,5 @@
 Parmasan.egg-info/
 examples/results/
 *.log
+
+.idea/
