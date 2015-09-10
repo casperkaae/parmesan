@@ -6,23 +6,23 @@ import numpy as np
 
 class SampleLayer(lasagne.layers.MergeLayer):
     """
-    Simple sampling layer drawing a single monte carlo sample to approximate
-    E_q [log( p(x,z) / q(z|x) )]. This is the approach desribed in
+    Simple sampling layer drawing a single Monte Carlo sample to approximate
+    E_q [log( p(x,z) / q(z|x) )]. This is the approach described in
     Kingma et. al. 2013 [KINGMA]
 
     Parameters
     ----------
     mu, log_var : class:`Layer` instances
-        Parametrizing the mean and log(variance) of the distribution to sample
-        from as described in [KINGMA]. The code assumes that these have the same
-        number of dimensions
+        Parameterizing the mean and log(variance) of the distribution to sample
+        from as described in [KINGMA]. The code assumes that these have the
+        same number of dimensions
 
 
     References
+    ----------
         [KINGMA] Kingma, Diederik P., and Max Welling.
         "Auto-encoding variational bayes."
         arXiv preprint arXiv:1312.6114 (2013).
-
     """
     def __init__(self, mu, log_var, **kwargs):
         super(SampleLayer, self).__init__([mu, log_var], **kwargs)
@@ -42,12 +42,12 @@ class SampleLayer(lasagne.layers.MergeLayer):
 
 class SampleIWAELayer(lasagne.layers.MergeLayer):
     """
-    importance sampling in Variational methods as desribed in [BURDA].xw
+    Importance sampling in variational methods as described in [BURDA].
 
     Parameters
     ----------
     mu, log_var : class:`Layer` instances
-        Parametrizing the mean and log(variance) of the distribution to sample
+        Parameterizing the mean and log(variance) of the distribution to sample
         from as described in [BURDA]. The code assumes that these have the same
         number of dimensions
 
@@ -62,6 +62,7 @@ class SampleIWAELayer(lasagne.layers.MergeLayer):
         [BURDA] Burda, Yuri, Roger Grosse, and Ruslan Salakhutdinov.
         "Importance Weighted Autoencoders."
         arXiv preprint arXiv:1509.00519 (2015).
+
     """
 
     def __init__(self, mu, var, Eq_samples=1, iwae_samples=10,**kwargs):
