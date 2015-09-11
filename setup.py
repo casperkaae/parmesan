@@ -26,7 +26,7 @@ tests_require = [
 setup(
     name="Parmesan",
     version=version,
-    description="A lightweight library to build Variational Neural Networks in Theano",
+    description="Variational and semi-supervised neural network toppings for Lasagne",
     long_description="\n\n".join([README, CHANGES]),
     classifiers=[
         "Development Status :: 1 - Alpha",
