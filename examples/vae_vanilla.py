@@ -3,9 +3,9 @@ theano.config.floatX = 'float32'
 import theano.tensor as T
 import lasagne
 import numpy as np
-from parmasan.distributions import logstandard_normal, lognormal2
-from parmasan.layers import SampleLayer
-from parmasan.datasets import load_mnist_realval
+from parmesan.distributions import logstandard_normal, lognormal2
+from parmesan.layers import SampleLayer
+from parmesan.datasets import load_mnist_realval
 import time, shutil, os
 
 

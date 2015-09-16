@@ -18,8 +18,8 @@ else:
 from . import distributions
 from . import datasets
 from . import layers
-
+from . import utils
 
 import pkg_resources
-__version__ = pkg_resources.get_distribution("Parmasan").version
+__version__ = pkg_resources.get_distribution("Parmesan").version
 del pkg_resources
