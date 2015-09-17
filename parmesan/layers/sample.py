@@ -2,13 +2,12 @@ import lasagne
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import theano.tensor as T
 import theano
-import numpy as np
 
-class SampleLayer(lasagne.layers.MergeLayer):
+class SimpleSampleLayer(lasagne.layers.MergeLayer):
     """
     Simple sampling layer drawing a single Monte Carlo sample to approximate
     E_q [log( p(x,z) / q(z|x) )]. This is the approach described in
-    Kingma et. al. 2013 [KINGMA]
+    Kingma et. al. 2013 [KINGMA].
 
     Parameters
     ----------
@@ -25,7 +24,7 @@ class SampleLayer(lasagne.layers.MergeLayer):
         arXiv preprint arXiv:1312.6114 (2013).
     """
     def __init__(self, mu, log_var, **kwargs):
-        super(SampleLayer, self).__init__([mu, log_var], **kwargs)
+        super(SimpleSampleLayer, self).__init__([mu, log_var], **kwargs)
 
         self._srng = RandomStreams(
             lasagne.random.get_rng().randint(1, 2147462579))
@@ -40,9 +39,11 @@ class SampleLayer(lasagne.layers.MergeLayer):
         return z
 
 
-class SampleIWAELayer(lasagne.layers.MergeLayer):
+class SampleLayer(lasagne.layers.MergeLayer):
     """
-    Importance sampling in variational methods as described in [BURDA].
+    Samplelayer supporting importance sampling as described in [BURDA] and
+    multiple monte carlo samples for the approximation of
+    E_q [log( p(x,z) / q(z|x) )]
 
     Parameters
     ----------
@@ -65,11 +66,11 @@ class SampleIWAELayer(lasagne.layers.MergeLayer):
 
     """
 
-    def __init__(self, mu, var, Eq_samples=1, iwae_samples=10,**kwargs):
-        super(SampleIWAELayer, self).__init__([mu, var], **kwargs)
+    def __init__(self, mu, var, Eq_samples=1, iw_samples=10,**kwargs):
+        super(SampleLayer, self).__init__([mu, var], **kwargs)
 
         self.E_qsamples = Eq_samples
-        self.iwae_samples = iwae_samples
+        self.iwae_samples = iw_samples
 
         self._srng = RandomStreams(
             lasagne.random.get_rng().randint(1, 2147462579))
@@ -85,12 +86,10 @@ class SampleIWAELayer(lasagne.layers.MergeLayer):
 
     def get_output_for(self, input, **kwargs):
         mu, log_var = input
-        #mu, log_var, (bs, num_latent)
         batch_size, num_latent = mu.shape
         eps = self._srng.normal([batch_size, self.E_qsamples, self.iwae_samples, num_latent],
                                 dtype=theano.config.floatX)
 
-        #z.shape: (batch_size, self.ivae_samples, num_latent)
         z = mu.dimshuffle(0,'x','x',1) + \
             T.exp(0.5 * log_var.dimshuffle(0,'x','x',1)) * eps
 

@@ -1,7 +1,5 @@
 import lasagne
-from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import theano.tensor as T
-import theano
 import numpy as np
 
 class NormalizingPlanarFlowLayer(lasagne.layers.Layer):
@@ -53,7 +51,7 @@ class NormalizingPlanarFlowLayer(lasagne.layers.Layer):
     
     
     def get_output_for(self, input, **kwargs):
-        # 1) calculate u_hat to ensure invertability (appendix A.1 to)
+        # 1) calculate u_hat to ensure invertibility (appendix A.1 to)
         # 2) calculate the forward transformation of the input f(z) (Eq. 8)
         # 3) calculate u_hat^T psi(z) to be used in the LL function
         

@@ -1,6 +1,5 @@
 import lasagne
 
-
 class ListIndexLayer(lasagne.layers.Layer):
     """
     If a layer outputs a list we use this layer to fetch a specif index

@@ -4,7 +4,7 @@ import theano.tensor as T
 import lasagne
 import numpy as np
 from parmesan.distributions import logstandard_normal, lognormal2
-from parmesan.layers import SampleLayer
+from parmesan.layers import SimpleSampleLayer
 from parmesan.datasets import load_mnist_realval
 import time, shutil, os
 
@@ -58,7 +58,7 @@ l_mu = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=l
 l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_LOG_VAR')
 
 #sample the latent variables using mu(x) and log(sigma^2(x))
-l_z = SampleLayer(mu=l_mu, log_var=l_log_var)
+l_z = SimpleSampleLayer(mu=l_mu, log_var=l_log_var)
 
 ### GENERATIVE MODEL p(x|z)
 l_dec_h1 = lasagne.layers.DenseLayer(l_z, num_units=100, name='DEC_DENSE2')
