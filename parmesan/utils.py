@@ -105,49 +105,49 @@ class ConfusionMatrix:
         return np.sum(tp) / n_samples
 
     def sensitivity(self):
-        tp, tn, fp, fn = self.getErrors()
+        tp, tn, fp, fn = self.geterrors()
         res = tp / (tp + fn)
         res = res[~np.isnan(res)]
         return res
 
     def specificity(self):
-        tp, tn, fp, fn = self.getErrors()
+        tp, tn, fp, fn = self.geterrors()
         res = tn / (tn + fp)
         res = res[~np.isnan(res)]
         return res
 
     def positivepredictivevalue(self):
-        tp, tn, fp, fn = self.getErrors()
+        tp, tn, fp, fn = self.geterrors()
         res = tp / (tp + fp)
         res = res[~np.isnan(res)]
         return res
 
     def negativepredictivevalue(self):
-        tp, tn, fp, fn = self.getErrors()
+        tp, tn, fp, fn = self.geterrors()
         res = tn / (tn + fn)
         res = res[~np.isnan(res)]
         return res
 
     def falsepositiverate(self):
-        tp, tn, fp, fn = self.getErrors()
+        tp, tn, fp, fn = self.geterrors()
         res = fp / (fp + tn)
         res = res[~np.isnan(res)]
         return res
 
     def falsediscoveryrate(self):
-        tp, tn, fp, fn = self.getErrors()
+        tp, tn, fp, fn = self.geterrors()
         res = fp / (tp + fp)
         res = res[~np.isnan(res)]
         return res
 
     def F1(self):
-        tp, tn, fp, fn = self.getErrors()
+        tp, tn, fp, fn = self.geterrors()
         res = (2*tp) / (2*tp + fp + fn)
         res = res[~np.isnan(res)]
         return res
 
     def matthewscorrelation(self):
-        tp, tn, fp, fn = self.getErrors()
+        tp, tn, fp, fn = self.geterrors()
         numerator = tp*tn - fp*fn
         denominator = np.sqrt((tp + fp)*(tp + fn)*(tn + fp)*(tn + fn))
         res = numerator / denominator
