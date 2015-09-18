@@ -100,7 +100,7 @@ class ConfusionMatrix:
                   >>> conf.batchAdd([0,0,1],[0,0,2])
                   >>> print conf.accuracy()
         """
-        tp, _, _, _ = self.getErrors()
+        tp, _, _, _ = self.geterrors()
         n_samples = np.sum(self.mat)
         return np.sum(tp) / n_samples
 
