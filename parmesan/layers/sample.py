@@ -65,8 +65,8 @@ class SampleLayer(lasagne.layers.MergeLayer):
 
     """
 
-    def __init__(self, mu, var, eq_samples=1, iw_samples=1,**kwargs):
-        super(SampleLayer, self).__init__([mu, var], **kwargs)
+    def __init__(self, mu, log_var, eq_samples=1, iw_samples=1, **kwargs):
+        super(SampleLayer, self).__init__([mu, log_var], **kwargs)
 
         self.eq_samples = eq_samples
         self.iw_samples = iw_samples
