@@ -21,5 +21,5 @@ from . import layers
 from . import utils
 
 import pkg_resources
-__version__ = pkg_resources.get_distribution("Parmesan").version
+__version__ = pkg_resources.get_distribution("parmesan").version
 del pkg_resources
