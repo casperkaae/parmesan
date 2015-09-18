@@ -182,19 +182,19 @@ h1, z1, z_noise1, norm_list1 = create_encoder(
     h0, num_units=1000, nonlinearity=unit, layer_num=1)
 
 h2, z2, z_noise2, norm_list2 = create_encoder(
-    h1, num_units=500, nonlinearity=unit, layer_num=1)
+    h1, num_units=500, nonlinearity=unit, layer_num=2)
 
 h3, z3, z_noise3, norm_list3 = create_encoder(
-    h2, num_units=250, nonlinearity=unit, layer_num=1)
+    h2, num_units=250, nonlinearity=unit, layer_num=3)
 
 h4, z4, z_noise4, norm_list4 = create_encoder(
-    h3, num_units=250, nonlinearity=unit, layer_num=1)
+    h3, num_units=250, nonlinearity=unit, layer_num=4)
 
 h5, z5, z_noise5, norm_list5 = create_encoder(
-    h4, num_units=250, nonlinearity=unit, layer_num=1)
+    h4, num_units=250, nonlinearity=unit, layer_num=5)
 
 h6, z6, z_noise6, norm_list6 = create_encoder(
-    h4, num_units=10, nonlinearity=softmax, layer_num=1)
+    h4, num_units=10, nonlinearity=softmax, layer_num=6)
 
 l_out_enc = h6
 
