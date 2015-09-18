@@ -125,7 +125,7 @@ l_mu = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=l
 l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_LOG_VAR')
 
 #sample layer
-l_z = SampleLayer(mu=l_mu, var=l_log_var, Eq_samples=sym_Eq_samples, iw_samples=sym_iw_samples)
+l_z = SampleLayer(mu=l_mu, var=l_log_var, eq_samples=sym_Eq_samples, iw_samples=sym_iw_samples)
 print "OUTPUT SIZE OF l_z using BS=%i, sym_iw_samples=%i, sym_Eq_samples=%i --"\
       %(batch_size, iw_samples,Eq_samples), \
     lasagne.layers.get_output(l_z,sym_x).eval(
