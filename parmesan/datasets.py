@@ -41,17 +41,11 @@ def cifar10(datasets_dir='data', num_val=5000):
     train_files = []
     for filepath in fnmatch.filter(os.listdir(data_dir), 'data*'):
         train_files.append(os.path.join(data_dir, filepath))
+    train_files = sorted(train_files, key=lambda x: x.split("_")[-1])
 
     test_file = os.path.join(data_dir, 'test_batch')
 
-
-    name2label = {k: v for v, k in enumerate(
-        unpickle(os.path.join(data_dir, 'batches.meta'))['label_names'])}
-    label2name = {v: k for k, v in name2label.items()}
-
-    train_files = sorted(train_files, key=lambda x: x.split("_")[-1])
-    x_train = []
-    targets_train = []
+    x_train, targets_train = [], []
     for f in train_files:
         d = unpickle(f)
         x_train.append(d['data'])
