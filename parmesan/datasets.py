@@ -66,10 +66,9 @@ def cifar10(datasets_dir='data', num_val=5000):
     x_test = d['data']
     targets_test = d['labels']
     x_test = np.array(x_test, dtype='uint8')
-    shp = x_test.shape
     x_test = x_test.reshape(-1, 3, 32, 32)
     targets_test = np.array(targets_test)
-    targets_test = targets_train.ravel()
+    targets_test = targets_test.ravel()
 
     if num_val is not None:
         perm = np.random.permutation(x_train.shape[0])
