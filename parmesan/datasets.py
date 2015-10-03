@@ -34,9 +34,11 @@ def cifar10(datasets_dir='data', num_val=5000):
 
     if not os.path.isfile(data_file):
         urllib.urlretrieve(url, data_file)
+        org_dir = os.getcwd()
         with tarfile.open(data_file) as tar:
             os.chdir(datasets_dir)
             tar.extractall()
+        os.chdir(org_dir)
 
     train_files = []
     for filepath in fnmatch.filter(os.listdir(data_dir), 'data*'):
