@@ -19,6 +19,7 @@ from . import distributions
 from . import datasets
 from . import layers
 from . import utils
+from . import preprocessing
 
 import pkg_resources
 __version__ = pkg_resources.get_distribution("parmesan").version
