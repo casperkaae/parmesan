@@ -5,7 +5,8 @@ Parmesan is a library adding variational and semi-supervised neural network mode
 Installation
 ------------
 Parmesan depends heavily on the `Lasagne<https://github.com/Lasagne/Lasagne>`_. and `Theano<http://deeplearning.net/software/theano>`_. libraries. Make sure these are installed
-`Lasagne<http://github.com/Lasagne/Lasagne>`_
+`Lasagne
+<http://github.com/Lasagne/Lasagne>`_
 
 .. code-block:: bash
 
