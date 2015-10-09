@@ -41,7 +41,8 @@ Below is an image of the log-likelihood terms training an importance weighted au
 The test performance was evaluated using 5000 importance samples and be should directly comparable to the results in Burda et. al.
 The final test performance is LL=-84.78 which is better than the current best published results at LL=-86.76 reported in Burda et. al., al table 1 (compare to top 1. row and 4. row in column IVAE)).
 
-![iw_vae](https://raw.githubusercontent.com/casperkaae/parmesan/master/misc/eval_L5000.jpg)
+![iw_vae]
+(https://raw.githubusercontent.com/casperkaae/parmesan/master/misc/eval_L5000.jpg)
 
 The results can be reproduced by
 
