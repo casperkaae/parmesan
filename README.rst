@@ -19,10 +19,10 @@ Parmesan depends heavily on the `Lasagne
 
 Documentation
 -------------
-Work in progress. At the moment Parmesan primarily includes layers for
+Work in progress. At the moment Parmesan primarily includes
 
-* monte carlo approximation of integrals in **parmesan/layers/sample.py**
-* constructing Ladder Networks in **parmesan/layers/ladderlayers.py**
+* Layers for Monte Carlo approximation of integrals used in (importance weighted) variational autoencoders in *parmesan/layers/sample.py*
+* Layers for constructing Ladder Networks in *parmesan/layers/ladderlayers.py*
 
 Please see these for further details. Further see the examples section below for working examples.
 
