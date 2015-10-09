@@ -11,12 +11,14 @@ Install using pip
 
   pip install https://github.com/casperkaae/parmesan.git --user --no-deps
 
+
 Install from source
 .. code-block:: bash
 
   git clone https://github.com/casperkaae/parmesan.git
   cd parmesan
   python setup.py develop
+
 
 Documentation
 -------------
