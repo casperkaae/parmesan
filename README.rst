@@ -8,7 +8,7 @@ Installation
 Parmesan depends heavily on the `Lasagne
 <http://github.com/Lasagne/Lasagne>`_ and
 `Theano
-<http://deeplearning.net/software/theano>`_. libraries.
+<http://deeplearning.net/software/theano>`_ libraries.
 
 .. code-block:: bash
 
@@ -29,7 +29,7 @@ Examples
 -------------
 * **examples/vae_vanilla.py**: Variational autoencoder as described in Kingma. et. al. 2013
 * **examples/iw_vae.py**: Variational autoencoder using importance sampling as described in Burda. et. al. 2015
-* **examples/mnist_ladder.py**: Semi-supervised Ladder Network as described in Rasmus et. al.
+* **examples/mnist_ladder.py**: Semi-supervised Ladder Network as described in Rasmus et. al. 2015
 
 
 Development
