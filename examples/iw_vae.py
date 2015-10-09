@@ -1,3 +1,5 @@
+# This code implementents an variational autoencoder using importance weighted
+# sampling as described in Burda et. al. 2015 "Importance Weighted Autoencoders"
 import theano
 theano.config.floatX = 'float32'
 import matplotlib
@@ -11,8 +13,8 @@ import matplotlib.pyplot as plt
 import shutil, gzip, os, cPickle, time, math, operator, argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-Eqsamples", type=int,
-        help="Eq_samples", default=1)
+parser.add_argument("-eqsamples", type=int,
+        help="samples over Eq", default=1)
 parser.add_argument("-iw_samples", type=int,
         help="iw_samples", default=1)
 parser.add_argument("-lr", type=float,
@@ -29,6 +31,10 @@ parser.add_argument("-nlatent", type=int,
         help="number of stochastic latent units", default=50)
 parser.add_argument("-batch_size", type=int,
         help="batch size", default=250)
+parser.add_argument("-eval_epoch", type=int,
+        help="ePochs between evaluation of test performance", default=250)
+
+
 args = parser.parse_args()
 
 def get_nonlin(nonlin):
@@ -41,8 +47,8 @@ def get_nonlin(nonlin):
     else:
         raise ValueError()
 
-iw_samples = args.iw_samples    #number of MC samples over the expectation over E_q(z|x)
-Eq_samples = args.Eq_samples    #number of importance weighted samples
+iw_samples = args.iw_samples   #number of MC samples over the expectation over E_q(z|x)
+Eq_samples = args.eqsamples    #number of importance weighted samples
 lr = args.lr
 res_out = args.outfolder
 nonlin_enc = get_nonlin(args.nonlin_enc)
@@ -51,7 +57,8 @@ nhidden = args.nhidden
 latent_size = args.nlatent
 batch_size = args.batch_size
 num_epochs = 10000
-batch_size_val = batch_size_test = 50
+batch_size_test = 50
+eval_epoch = args.eval_epoch
 
 ### SET UP LOGFILE AND OUTPUT FOLDER
 if not os.path.exists(res_out):
@@ -78,9 +85,9 @@ with open(logfile,'w') as f:
 
 
 sym_iw_samples = T.iscalar('iw_samples')
-sym_Eq_samples = T.iscalar('Eqsamples')
+sym_Eq_samples = T.iscalar('eq_samples')
 sym_lr = T.scalar('lr')
-sym_x = T.matrix()
+sym_x = T.matrix('x')
 
 
 c = - 0.5 * math.log(2*math.pi)
@@ -126,11 +133,6 @@ l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinear
 
 #sample layer
 l_z = SampleLayer(mu=l_mu, log_var=l_log_var, eq_samples=sym_Eq_samples, iw_samples=sym_iw_samples)
-print "OUTPUT SIZE OF l_z using BS=%i, sym_iw_samples=%i, sym_Eq_samples=%i --"\
-      %(batch_size, iw_samples,Eq_samples), \
-    lasagne.layers.get_output(l_z,sym_x).eval(
-    {sym_x: X, sym_iw_samples: np.int32(iw_samples),
-     sym_Eq_samples: np.int32(Eq_samples)}).shape
 
 # Generative model q(x|z)
 l_dec_h1 = lasagne.layers.DenseLayer(l_z, num_units=nhidden, name='DEC_DENSE2', nonlinearity=nonlin_dec)
@@ -149,7 +151,7 @@ z_eval, z_mu_eval, z_log_var_eval, x_mu_eval = lasagne.layers.get_output(
 
 
 
-def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, Eq_samples, iw_samples, epsilon=1e-6):
+def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, eq_samples, iw_samples, epsilon=1e-6):
     """
     Latent z       : gaussian with standard normal prior
     decoder output : bernoulli
@@ -166,9 +168,9 @@ def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, Eq_samples, iw_samp
 
     """
 
-    # reshape the variables so batch_size, Eq_samples and iw_samples are separate dimensions
-    z = z.reshape((-1, Eq_samples, iw_samples,  latent_size))
-    x_mu = x_mu.reshape((-1, Eq_samples, iw_samples,  num_features))
+    # reshape the variables so batch_size, eq_samples and iw_samples are separate dimensions
+    z = z.reshape((-1, eq_samples, iw_samples,  latent_size))
+    x_mu = x_mu.reshape((-1, eq_samples, iw_samples,  num_features))
 
     # dimshuffle x since we need to broadcast it when calculationg the binary
     # cross-entropy
@@ -179,12 +181,12 @@ def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, Eq_samples, iw_samp
     log_pz = standard_normal(z).sum(axis=3)
     log_px_given_z = T.sum(-T.nnet.binary_crossentropy(T.clip(x_mu,epsilon,1-epsilon), x), axis=3)
 
-    #all log_*** should have dimension (batch_size, Eq_samples, iw_samples)
+    #all log_*** should have dimension (batch_size, eq_samples, iw_samples)
     # Calculate the LL using log-sum-exp to avoid underflow
-    a = log_pz + log_px_given_z - log_qz_given_x    # size: (batch_size, nsamples, iw_samples)
-    a_max = T.max(a, axis=2, keepdims=True)         # size: (batch_size, nsamples, 1)
+    a = log_pz + log_px_given_z - log_qz_given_x    # size: (batch_size, eq_samples, iw_samples)
+    a_max = T.max(a, axis=2, keepdims=True)         # size: (batch_size, eq_samples, 1)
 
-    # LL is calculated using Eq (8) in burdeaet all.
+    # LL is calculated using Eq (8) in burda et al.
     # Working from inside out of the calculation below:
     # T.exp(a-a_max): (bathc_size, Eq_samples, iw_samples)
     # -> subtract a_max to avoid overflow. a_max is specific for  each set of
@@ -198,12 +200,19 @@ def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, Eq_samples, iw_samp
 
     return LL, T.mean(log_qz_given_x), T.mean(log_pz), T.mean(log_px_given_z)
 
-# TRAINING LOWER BOUND
+# LOWER BOUNDS
 LL_train, log_qz_given_x_train, log_pz_train, log_px_given_z_train = latent_gaussian_x_bernoulli(
-    z_train, z_mu_train, z_log_var_train, x_mu_train, sym_x, Eq_samples=sym_Eq_samples, iw_samples=sym_iw_samples)
+    z_train, z_mu_train, z_log_var_train, x_mu_train, sym_x, eq_samples=sym_Eq_samples, iw_samples=sym_iw_samples)
 
 LL_eval, log_qz_given_x_eval, log_pz_eval, log_px_given_z_eval = latent_gaussian_x_bernoulli(
-    z_eval, z_mu_eval, z_log_var_eval, x_mu_eval, sym_x, Eq_samples=sym_Eq_samples, iw_samples=sym_iw_samples)
+    z_eval, z_mu_eval, z_log_var_eval, x_mu_eval, sym_x, eq_samples=sym_Eq_samples, iw_samples=sym_iw_samples)
+
+#some sanity checks that we can forward data through the model
+print "OUTPUT SIZE OF l_z using BS=%i, sym_iw_samples=%i, sym_Eq_samples=%i --"\
+      %(batch_size, iw_samples,Eq_samples), \
+    lasagne.layers.get_output(l_z,sym_x).eval(
+    {sym_x: X, sym_iw_samples: np.int32(iw_samples),
+     sym_Eq_samples: np.int32(Eq_samples)}).shape
 
 print "log_pz_train", log_pz_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples),sym_Eq_samples:np.int32(Eq_samples)}).shape
 print "log_px_given_z_train", log_px_given_z_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_Eq_samples:np.int32(Eq_samples)}).shape
@@ -264,9 +273,8 @@ def test_epoch(nsamples,ivae_samples):
 
 print "Training"
 
-
 # TRAIN LOOP
-# We have made some the code very verbose to make it easier to follow.
+# We have made some the code very verbose to make it easier to understand.
 total_time_start = time.time()
 costs_train, log_qz_given_x_train, log_pz_train, log_px_given_z_train = [],[],[],[]
 LL_test1, log_qz_given_x_test1, log_pz_test1, log_px_given_z_test1 = [],[],[],[]
@@ -285,10 +293,8 @@ for epoch in range(1,num_epochs):
     if np.isnan(train_out[0]):
         ValueError("NAN in train LL!")
 
-    if epoch % 10 == 0:
+    if epoch % eval_epoch == 0:
         t = time.time() - start
-        print "calculating L1, L5000"
-
         costs_train += [train_out[0]]
         log_qz_given_x_train += [train_out[1]]
         log_pz_train += [train_out[2]]
@@ -296,12 +302,13 @@ for epoch in range(1,num_epochs):
         z_mu_train = train_out[4]
         z_log_var_train = train_out[5]
 
+        print "calculating LL eq=1, iw=5000"
         test_out5000 = test_epoch(1, 5000)
         LL_test5000 += [test_out5000[0]]
         log_qz_given_x_test5000 += [test_out5000[1]]
         log_pz_test5000 += [test_out5000[2]]
         log_px_given_z_test5000 += [test_out5000[3]]
-
+        print "calculating LL eq=1, iw=1"
         test_out1 = test_epoch(1, 1)
         LL_test1 += [test_out1[0]]
         log_qz_given_x_test1 += [test_out1[1]]

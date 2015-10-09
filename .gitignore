@@ -2,6 +2,7 @@
 *.pyc
 Parmasan.egg-info/
 examples/results/
+examples/outfolder/
 *.log
 
 .idea/
