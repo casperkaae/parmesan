@@ -33,6 +33,7 @@ class ContrastNorm(object):
     Code copied from https://github.com/arasmus/ladder/blob/master/nn.py
     """
     def __init__(self, scale=55, epsilon=1e-8):
+        raise Warning('ContranstNorm is untested!')
         self.scale = np.float32(scale)
         self.epsilon = np.float32(epsilon)
 
@@ -63,6 +64,7 @@ class ZCA(object):
     Code copied from https://github.com/arasmus/ladder/blob/master/nn.py
     """
     def __init__(self, n_components=None, data=None, filter_bias=0.1):
+        raise Warning('ZCA is untested!')
         self.filter_bias = np.float32(filter_bias)
         self.P = None
         self.P_inv = None

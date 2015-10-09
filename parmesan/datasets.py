@@ -19,7 +19,10 @@ def load_mnist_realval():
 
 
 def cifar10(datasets_dir='data', num_val=5000):
-    # this code is largely cp from Kyle Kastner
+    raise Warning('cifar10 loader is untested!')
+    # this code is largely cp from Kyle Kastner:
+    #
+    # https://gist.github.com/kastnerkyle/f3f67424adda343fef40
     try:
         import urllib
         urllib.urlretrieve('http://google.com')
