@@ -19,6 +19,9 @@ Install from source
 Documentation
 -------------
 Work in progress. Please see the examples folder for working code
+
+Examples
+-------------
   * **examples/vae_vanilla.py**: Variational autoencoder as described in Kingma. et. al. 2013 "Autoencoding Variational Bayes"
   * **examples/iw_vae.py**: Variational autoencoder using importance sampling as described in Burda. et. al. 2015 "Importance Weighted Autoencoders"
   * **examples/mnist_ladder.py**: Semi-supervised Ladder Network as described in Rasmus et. al. 2015 "Semi-Supervised Learning with Ladder Network"
@@ -26,9 +29,9 @@ Work in progress. Please see the examples folder for working code
 
 Development
 -----------
-Parmesan is a work in progress, inputs and contributions are very welcome.
+Parmesan is work in progress, inputs and contributions are very welcome.
 
 The library was developed by
-    * Casper Sønderby
-    * Søren Sønderby
+    * Casper Kaae Sønderby
+    * Søren Kaae Sønderby
     * Lars Maaløe
