@@ -1,5 +1,7 @@
 # This code implementents an variational autoencoder using importance weighted
 # sampling as described in Burda et. al. 2015 "Importance Weighted Autoencoders"
+# and the planar normalizing flow described in Rezende et. al. 2015
+# "Variational Inference with Normalizing Flows"
 import theano
 theano.config.floatX = 'float32'
 import matplotlib
@@ -7,7 +9,7 @@ matplotlib.use('Agg')
 import theano.tensor as T
 import numpy as np
 import lasagne
-from parmesan.layers import SampleLayer
+from parmesan.layers import SampleLayer, NormalizingPlanarFlowLayer, ListIndexLayer
 from parmesan.datasets import load_mnist_realval
 import matplotlib.pyplot as plt
 import shutil, gzip, os, cPickle, time, math, operator, argparse
@@ -29,6 +31,8 @@ parser.add_argument("-nhidden", type=int,
         help="number of hidden units in determistic layers", default=200)
 parser.add_argument("-nlatent", type=int,
         help="number of stochastic latent units", default=50)
+parser.add_argument("-nflows", type=int,
+        help="length of normalizing flow", default=10)
 parser.add_argument("-batch_size", type=int,
         help="batch size", default=250)
 parser.add_argument("-eval_epoch", type=int,
@@ -56,6 +60,7 @@ nonlin_dec = get_nonlin(args.nonlin_dec)
 nhidden = args.nhidden
 latent_size = args.nlatent
 batch_size = args.batch_size
+nflows = args.nflows
 num_epochs = 10000
 batch_size_test = 50
 eval_epoch = args.eval_epoch
@@ -134,24 +139,41 @@ l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinear
 #sample layer
 l_z = SampleLayer(mu=l_mu, log_var=l_log_var, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
 
+#Normalizing Flow
+l_psi_u = []
+l_zk = l_z
+for i in range(nflows):
+    l_nf = NormalizingPlanarFlowLayer(l_zk)
+    l_zk = ListIndexLayer(l_nf,index=0)
+    l_psi_u += [ ListIndexLayer(l_nf,index=1)] #we need this for the cost function jf
+
 # Generative model q(x|z)
 l_dec_h1 = lasagne.layers.DenseLayer(l_z, num_units=nhidden, name='DEC_DENSE2', nonlinearity=nonlin_dec)
 l_dec_h1 = lasagne.layers.DenseLayer(l_dec_h1, num_units=nhidden, name='DEC_DENSE1', nonlinearity=nonlin_dec)
 l_dec_x_mu = lasagne.layers.DenseLayer(l_dec_h1, num_units=num_features, nonlinearity=lasagne.nonlinearities.sigmoid, name='X_MU')
 
 # get output needed for evaluating of training i.e with noise if any
-z_train, z_mu_train, z_log_var_train, x_mu_train = lasagne.layers.get_output(
-    [l_z, l_mu, l_log_var, l_dec_x_mu], sym_x, deterministic=False
+train_out = lasagne.layers.get_output(
+    [l_z, l_mu, l_log_var, l_dec_x_mu]+l_psi_u, sym_x, deterministic=False
 )
+z_train = train_out[0]
+z_mu_train = train_out[1]
+z_log_var_train = train_out[2]
+x_mu_train = train_out[3]
+psi_u_train = train_out[4:]
 
 # get output needed for evaluating of testing i.e without noise
-z_eval, z_mu_eval, z_log_var_eval, x_mu_eval = lasagne.layers.get_output(
-    [l_z, l_mu, l_log_var, l_dec_x_mu], sym_x, deterministic=True
+eval_out = lasagne.layers.get_output(
+    [l_z, l_mu, l_log_var, l_dec_x_mu]+l_psi_u, sym_x, deterministic=True
 )
+z_eval = eval_out[0]
+z_mu_eval = eval_out[1]
+z_log_var_eval = eval_out[2]
+x_mu_eval = eval_out[3]
+psi_u_eval = eval_out[4:]
 
 
-
-def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, eq_samples, iw_samples, epsilon=1e-6):
+def latent_gaussian_x_bernoulli(z, z_mu, psi_u_list, z_log_var, x_mu, x, eq_samples, iw_samples, epsilon=1e-6):
     """
     Latent z       : gaussian with standard normal prior
     decoder output : bernoulli
@@ -176,15 +198,24 @@ def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, eq_samples, iw_samp
     # cross-entropy
     x = x.dimshuffle((0,'x','x',1))
 
+    for i in range(len(psi_u_list)):
+        psi_u_list[i] = psi_u_list[i].reshape((-1, eq_samples, iw_samples))
+
+
     #calculate LL components, note that we sum over the feature/num_unit dimension
     log_qz_given_x = normal2(z, z_mu, z_log_var).sum(axis=3)
     log_pz = standard_normal(z).sum(axis=3)
     log_px_given_z = T.sum(-T.nnet.binary_crossentropy(T.clip(x_mu,epsilon,1-epsilon), x), axis=3)
 
+    #normalizing flow loss
+    sum_log_psiu = 0
+    for psi_u in psi_u_list:
+        sum_log_psiu +=  T.log(T.abs_(1+psi_u))
+
     #all log_*** should have dimension (batch_size, eq_samples, iw_samples)
     # Calculate the LL using log-sum-exp to avoid underflow
-    a = log_pz + log_px_given_z - log_qz_given_x    # size: (batch_size, eq_samples, iw_samples)
-    a_max = T.max(a, axis=2, keepdims=True)         # size: (batch_size, eq_samples, 1)
+    a = log_pz + log_px_given_z - log_qz_given_x + sum_log_psiu    # size: (batch_size, eq_samples, iw_samples)
+    a_max = T.max(a, axis=2, keepdims=True)                        # size: (batch_size, eq_samples, 1)
 
     # LL is calculated using Eq (8) in burda et al.
     # Working from inside out of the calculation below:
@@ -202,10 +233,10 @@ def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, eq_samples, iw_samp
 
 # LOWER BOUNDS
 LL_train, log_qz_given_x_train, log_pz_train, log_px_given_z_train = latent_gaussian_x_bernoulli(
-    z_train, z_mu_train, z_log_var_train, x_mu_train, sym_x, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
+    z_train, z_mu_train, psi_u_train, z_log_var_train, x_mu_train, sym_x, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
 
 LL_eval, log_qz_given_x_eval, log_pz_eval, log_px_given_z_eval = latent_gaussian_x_bernoulli(
-    z_eval, z_mu_eval, z_log_var_eval, x_mu_eval, sym_x, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
+    z_eval, z_mu_eval, psi_u_eval, z_log_var_eval, x_mu_eval, sym_x, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
 
 #some sanity checks that we can forward data through the model
 print "OUTPUT SIZE OF l_z using BS=%i, sym_iw_samples=%i, sym_Eq_samples=%i --"\

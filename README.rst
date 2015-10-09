@@ -23,6 +23,7 @@ Work in progress. At the moment Parmesan primarily includes
 
 * Layers for Monte Carlo approximation of integrals used in (importance weighted) variational autoencoders in *parmesan/layers/sample.py*
 * Layers for constructing Ladder Networks in *parmesan/layers/ladderlayers.py*
+* Layers for implementing normalizing flows in *parmesan/layers/flow.py*
 
 Please see these for further details. Further see the examples section below for working examples.
 
@@ -30,12 +31,13 @@ Examples
 -------------
 * **examples/vae_vanilla.py**: Variational autoencoder as described in Kingma. et. al. 2013
 * **examples/iw_vae.py**: Variational autoencoder using importance sampling as described in Burda. et. al. 2015
+* **examples/iw_vae_normflow.py**: Variational autoencoder using normalizing flows and importance sampling as described in Burda. et. al. 2015 and Rezende et al. 2015
 * **examples/mnist_ladder.py**: Semi-supervised Ladder Network as described in Rasmus et. al. 2015
 
 
 Development
 -----------
-Parmesan is work in progress, inputs and contributions are very welcome.
+Parmesan is work in progress, inputs, contributions and bug reports are very welcome.
 
 The library was developed by
     * Casper Kaae Sønderby
@@ -47,5 +49,6 @@ References
 
 * Kingma, D. P., & Welling, M. (2013). Auto-encoding variational bayes. arXiv preprint arXiv:1312.6114.
 * Burda, Y., Grosse, R., & Salakhutdinov, R. (2015). Importance Weighted Autoencoders. arXiv preprint arXiv:1509.00519.
+* Rezende, D. J., & Mohamed, S. (2015). Variational Inference with Normalizing Flows. arXiv preprint arXiv:1505.05770.
 * Rasmus, A., Valpola, H., Honkala, M., Berglund, M., & Raiko, T. (2015). Semi-Supervised Learning with Ladder Network. arXiv preprint arXiv:1507.02672.
 
