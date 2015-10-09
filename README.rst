@@ -8,13 +8,13 @@ Parmesan depends heavily on the [Lasagne](https://github.com/Lasagne/Lasagne) an
 
 Install using pip
 .. code-block:: bash
-    pip install https://github.com/casperkaae/parmesan.git --user --no-deps
+  pip install https://github.com/casperkaae/parmesan.git --user --no-deps
 
 Install from source
 .. code-block:: bash
-    git clone https://github.com/casperkaae/parmesan.git
-    cd parmesan
-    python setup.py develop
+  git clone https://github.com/casperkaae/parmesan.git
+  cd parmesan
+  python setup.py develop
 
 Documentation
 -------------
@@ -22,9 +22,9 @@ Work in progress. Please see the examples folder for working code
 
 Examples
 -------------
-  * **examples/vae_vanilla.py**: Variational autoencoder as described in Kingma. et. al. 2013 "Autoencoding Variational Bayes"
-  * **examples/iw_vae.py**: Variational autoencoder using importance sampling as described in Burda. et. al. 2015 "Importance Weighted Autoencoders"
-  * **examples/mnist_ladder.py**: Semi-supervised Ladder Network as described in Rasmus et. al. 2015 "Semi-Supervised Learning with Ladder Network"
+* **examples/vae_vanilla.py**: Variational autoencoder as described in Kingma. et. al. 2013 "Autoencoding Variational Bayes"
+* **examples/iw_vae.py**: Variational autoencoder using importance sampling as described in Burda. et. al. 2015 "Importance Weighted Autoencoders"
+* **examples/mnist_ladder.py**: Semi-supervised Ladder Network as described in Rasmus et. al. 2015 "Semi-Supervised Learning with Ladder Network"
 
 
 Development
