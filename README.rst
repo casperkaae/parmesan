@@ -20,6 +20,7 @@ Parmesan depends heavily on the `Lasagne
 Documentation
 -------------
 Work in progress. At the moment Parmesan primarily includes layers for
+
 * monte carlo approximation of integrals in **parmesan/layers/sample.py**
 * constructing Ladder Networks in **parmesan/layers/ladderlayers.py**
 
