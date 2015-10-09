@@ -1,3 +1,5 @@
+# Implements an variational autencoder as described in Kingma et al. 2013
+# "Auto-Encoding Variational Bayes"
 import theano
 theano.config.floatX = 'float32'
 import theano.tensor as T
@@ -156,10 +158,3 @@ for epoch in range(num_epochs):
     print line
     with open(logfile,'a') as f:
         f.write(line + "\n")
-
-
-
-
-
-
-
