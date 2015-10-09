@@ -10,7 +10,7 @@ Parmesan depends heavily on the `Lasagne
 `Theano
 <http://deeplearning.net/software/theano>`_ libraries. Please make sure you have these installed before installing Parmesan.
 
-Install Parmesan
+**Install Parmesan**
 
 .. code-block:: bash
 
