@@ -13,10 +13,12 @@ Install using pip
 
 
 Install from source
-.. code-block:: bash
 ```
   lalalal
 ```
+
+.. code-block:: bash
+
   git clone https://github.com/casperkaae/parmesan.git
   cd parmesan
   python setup.py develop
