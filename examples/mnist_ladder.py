@@ -1,3 +1,34 @@
+"""
+SEMI SUPERVISED LADDER NETWORKS ON MNIST
+-----------------------------------------
+This code reproduces the fully connected MNIST results on
+with ladder networks.
+
+See http://arxiv.org/abs/1507.02672
+
+
+The code will get to 1.25 which is slightly worse than the results reported
+in http://arxiv.org/abs/1507.02672 (1.25)
+
+
+Note
+-----
+Because the batchnormalization collects statistics by running the
+training data through the network in a single batch you'll probably need a
+GPU with a large memory. The code is tested on TitanX and K40.
+
+If you encounter memory problems you can try changing alpha from 'single_pass'
+to eg. 0.5. You'll then need to run the training data through the collect
+function in batches. This is completely untested (!).
+
+Credits
+-------
+The batchnormalization code is based on code written by
+Jan Schluter https://gist.github.com/f0k/f1a6bd3c8585c400c190
+
+
+
+"""
 import lasagne
 from lasagne.layers import *
 from lasagne.nonlinearities import identity, softmax
@@ -7,13 +38,17 @@ import theano.tensor as T
 from parmesan.layers import (ListIndexLayer, NormalizeLayer,
                              ScaleAndShiftLayer, DecoderNormalizeLayer,
                              DenoiseLayer,)
+import os
+import uuid
 import parmesan
 
 
-class MyInit(lasagne.init.Initializer):
+class RasmusInit(lasagne.init.Initializer):
     """Sample initial weights from the Gaussian distribution.
     Initial weight parameters are sampled from N(mean, std).
     Parameters
+
+    https://github.com/arasmus/ladder
     ----------
     std : float
         Std of initial parameters.
@@ -33,24 +68,26 @@ class MyInit(lasagne.init.Initializer):
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument("-semisup", type=str, default='true')
 parser.add_argument("-lambdas", type=str,
                     default='1000,10,0.1,0.1,0.1,0.1,0.1')
 parser.add_argument("-lr", type=str, default='0.001')
 parser.add_argument("-optimizer", type=str, default='adam')
 parser.add_argument("-init", type=str, default='None')
 parser.add_argument("-initval", type=str, default='relu')
-parser.add_argument("-gradclip", type=str, default='None')
+parser.add_argument("-gradclip", type=str, default='1')
 args = parser.parse_args()
 
-out_file = ""
-for name, val in sorted(vars(args).items()):
-    if len(out_file) > 0:
-        out_file += "_"
-    val = val.replace(',', "").replace(".", "")
-    out_file += name + val
 
-with open(out_file, 'wb') as f:
+num_classes = 10
+batch_size = 100  # fails if batch_size != batch_size
+num_labels = 100
+
+output_folder = "logs/mnist_ladder" + str(uuid.uuid4())[:18].replace('-', '_')
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+output_file = os.path.join(output_folder, 'results.log')
+
+with open(output_file, 'wb') as f:
     f.write("#"*80 + "\n")
     for name, val in sorted(vars(args).items()):
         s = str(name) + " "*(40-len(name)) + str(val)
@@ -66,7 +103,7 @@ optimizers = {'adam': lasagne.updates.adam,
 optimizer = optimizers[args.optimizer]
 
 if args.init == 'None':  # default to antti rasmus init
-    init = MyInit()
+    init = RasmusInit()
 else:
     initval = float(args.initval)
     inits = {'he': lasagne.init.HeUniform(initval),
@@ -75,11 +112,6 @@ else:
              'normal': lasagne.init.HeUniform(initval)}
     init = inits[args.init]
 
-
-if args.semisup not in ['true', 'false']:
-    raise ValueError('semisup must be true|false')
-
-semisup = args.semisup == 'true'
 
 if args.gradclip == 'None':
     gradclip = None
@@ -91,7 +123,6 @@ lasagne.random.set_rng(np.random.RandomState(seed=1))
 
 [x_train, targets_train, x_valid,
  targets_valid, x_test, targets_test] = parmesan.datasets.load_mnist_realval()
-num_classes = 10
 
 x_train = x_train.astype('float32')
 x_valid = x_valid.astype('float32')
@@ -100,24 +131,16 @@ targets_train = targets_train.astype('int32')
 targets_valid = targets_valid.astype('int32')
 targets_test = targets_test.astype('int32')
 
-batch_size = 100  # fails if batch_size != batch_size
-num_labels = 100
-if semisup:
-    np.random.seed(1)
-    shuffle = np.random.permutation(x_train.shape[0])
-    x_train_lab = x_train[:num_labels]
-    targets_train_lab = targets_train[:num_labels]
-    labeled_slice = slice(0, num_labels)
-    unlabeled_slice = slice(num_labels, 2*num_labels)
-else:
-    # take all
-    labeled_slice = slice(0, 2*batch_size)
-    unlabeled_slice = labeled_slice
+np.random.seed(1)
+shuffle = np.random.permutation(x_train.shape[0])
+x_train_lab = x_train[:num_labels]
+targets_train_lab = targets_train[:num_labels]
+labeled_slice = slice(0, num_labels)
+unlabeled_slice = slice(num_labels, 2*num_labels)
 
 lambdas = map(float, args.lambdas.split(','))
 
 assert len(lambdas) == 7
-print "Unsup:   ", semisup
 print "Lambdas: ", lambdas
 
 
@@ -138,15 +161,13 @@ h0 = z_noise0  # no nonlinearity on input
 
 
 def get_unlab(l):
-    # work around for bug in lasagne slice
-    l1 = ReshapeLayer(l, (2*num_labels, l.output_shape[1]))
-    return SliceLayer(l1, indices=slice(num_labels, 2*num_labels), axis=0)
+    return SliceLayer(l, indices=slice(num_labels, None), axis=0)
 
 
 def create_encoder(incoming, num_units, nonlinearity, layer_num):
     i = layer_num
     z_pre = DenseLayer(
-        incoming=incoming, num_units=num_units,nonlinearity=identity, b=None,
+        incoming=incoming, num_units=num_units, nonlinearity=identity, b=None,
         name='enc_dense%i' % i, W=init)
     norm_list = NormalizeLayer(
         z_pre, return_stats=True, name='enc_normalize%i' % i,
@@ -161,21 +182,16 @@ def create_encoder(incoming, num_units, nonlinearity, layer_num):
 
 def create_decoder(z_hat_in, z_noise, num_units, norm_list, layer_num):
     i = layer_num
-    u = ScaleAndShiftLayer(NormalizeLayer(
-        DenseLayer(z_hat_in, num_units=num_units, name='dec_dense%i' % i,
-                   W=init, nonlinearity=identity),
-        name='dec_normalize%i' % i),
-        name='dec_scale%i' % i)
-    z_hat = DenoiseLayer(u_net=u, z_net=get_unlab(z_noise),
-                         name='dec_denoise%i' % i)
+    dense = DenseLayer(z_hat_in, num_units=num_units, name='dec_dense%i' % i,
+                       W=init, nonlinearity=identity)
+    normalize = NormalizeLayer(dense, name='dec_normalize%i' % i)
+    u = ScaleAndShiftLayer(normalize, name='dec_scale%i' % i)
+    z_hat = DenoiseLayer(u_net=u, z_net=get_unlab(z_noise), name='dec_denoise%i' % i)
     mean = ListIndexLayer(norm_list, index=1, name='dec_index_mean%i' % i)
     var = ListIndexLayer(norm_list, index=2, name='dec_index_var%i' % i)
     z_hat_bn = DecoderNormalizeLayer(z_hat, mean=mean, var=var,
                                      name='dec_decnormalize%i' % i)
     return z_hat, z_hat_bn
-
-
-
 
 
 h1, z1, z_noise1, norm_list1 = create_encoder(
@@ -200,12 +216,12 @@ l_out_enc = h6
 
 print "h6:", lasagne.layers.get_output(h6, sym_x).eval({sym_x: x_train[:200]}).shape
 h6_dec = get_unlab(l_out_enc)
-print "h6_dec:", lasagne.layers.get_output(h6_dec, sym_x).eval({sym_x: x_train[:200]}).shape
+print "y_weights_decoder:", lasagne.layers.get_output(h6_dec, sym_x).eval({sym_x: x_train[:200]}).shape
 
-# note that the DenoiseLayer takes a z_indices argument which slices
-# the lateral connection from the encoder. For the fully supervised case
-# the slice is just all labels.
 
+###############
+#  DECODER    #
+###############
 
 ##### Decoder Layer 6
 u6 = ScaleAndShiftLayer(NormalizeLayer(
@@ -216,7 +232,6 @@ var6 = ListIndexLayer(norm_list6, index=2, name='dec_index_var6')
 z_hat_bn6 = DecoderNormalizeLayer(
     z_hat6, mean=mean6, var=var6, name='dec_decnormalize6')
 ###########################
-
 
 z_hat5, z_hat_bn5 = create_decoder(z_hat6, z_noise5, 250, norm_list5, 5)
 z_hat4, z_hat_bn4 = create_decoder(z_hat5, z_noise4, 250, norm_list4, 4)
@@ -241,16 +256,16 @@ print "z_hat_bn0:", lasagne.layers.get_output(
 [enc_out_clean, z0_clean, z1_clean, z2_clean,
  z3_clean, z4_clean, z5_clean, z6_clean] = lasagne.layers.get_output(
     [l_out_enc, z0, z1, z2, z3, z4, z5, z6], sym_x, deterministic=True)
+
 # Clean pass of encoder  note that these are both labeled
 # and unlabeled so we need to slice
-if semisup:
-    z0_clean = z0_clean[num_labels:]
-    z1_clean = z1_clean[num_labels:]
-    z2_clean = z2_clean[num_labels:]
-    z3_clean = z3_clean[num_labels:]
-    z4_clean = z4_clean[num_labels:]
-    z5_clean = z5_clean[num_labels:]
-    z6_clean = z6_clean[num_labels:]
+z0_clean = z0_clean[num_labels:]
+z1_clean = z1_clean[num_labels:]
+z2_clean = z2_clean[num_labels:]
+z3_clean = z3_clean[num_labels:]
+z4_clean = z4_clean[num_labels:]
+z5_clean = z5_clean[num_labels:]
+z6_clean = z6_clean[num_labels:]
 
 # noisy pass encoder + decoder
 # the output from the decoder is only unlabeled because we slice the top h
@@ -263,8 +278,7 @@ if semisup:
 
 
 # if unsupervised we need ot cut ot the samples with no labels.
-if semisup:
-    out_enc_noisy = out_enc_noisy[:num_labels]
+out_enc_noisy = out_enc_noisy[:num_labels]
 
 costs = [T.mean(T.nnet.categorical_crossentropy(out_enc_noisy, sym_t))]
 
@@ -305,9 +319,11 @@ f_train = theano.function([sym_x, sym_t],
                           [cost, out_enc_noisy] + costs,
                           updates=updates, on_unused_input='warn')
 
+# Our current implementation of batchnormalization collects the statistics
+# by passing the entire training dataset through the network. This collects
+# the correct statistics but is not possible for larger datasets...
 f_collect = theano.function([sym_x],   # NO UPDATES !!!!!!! FOR COLLECT
                             [collect_out], on_unused_input='warn')
-
 
 num_samples_train = x_train.shape[0]
 num_batches_train = num_samples_train // batch_size
@@ -321,24 +337,7 @@ cur_loss = 0
 loss = []
 
 
-def train_epoch_fully_labeled(x, targets_train):
-    confusion_train = parmesan.utils.ConfusionMatrix(num_classes)
-    losses = []
-    shuffle = np.random.permutation(x.shape[0])
-    x = x[shuffle]
-    targets_train = targets_train[shuffle]
-    for i in range(num_batches_train):
-        idx = range(i*batch_size, (i+1)*batch_size)
-        x_batch = x[idx]
-        target_batch = targets_train[idx]
-        batch_loss, net_out = f_train(x_batch, target_batch)
-        preds = np.argmax(net_out, axis=-1)
-        confusion_train.batchadd(target_batch, preds)
-        losses += [batch_loss]
-    return confusion_train, losses
-
-
-def train_epoch_unsupervised(x, targets_train):
+def train_epoch_semisupervised(x):
     confusion_train = parmesan.utils.ConfusionMatrix(num_classes)
     losses = []
     shuffle = np.random.permutation(x.shape[0])
@@ -362,14 +361,6 @@ def train_epoch_unsupervised(x, targets_train):
         losses += [batch_loss]
     return confusion_train, losses, layer_costs
 
-# select correct training function...
-if semisup:
-    print "Training function:  train_epoch_unsupervised"
-    train_epoch = train_epoch_unsupervised
-else:
-    print "Training function:  train_epoch_fully_labeled"
-    train_epoch = train_epoch_fully_labeled
-
 
 def test_epoch(x, y):
     confusion_valid = parmesan.utils.ConfusionMatrix(num_classes)
@@ -379,19 +370,17 @@ def test_epoch(x, y):
     confusion_valid.batchadd(y, preds)
     return confusion_valid
 
-with open(out_file, 'a') as f:
+with open(output_file, 'a') as f:
     f.write('Starting Training !\n')
-    f.write('Unsupervised: %s \n' % args.semisup)
 
 
 for epoch in range(num_epochs):
-    confusion_train, losses_train, layer_costs = train_epoch(
-        x_train, targets_train)
+    confusion_train, losses_train, layer_costs = train_epoch_semisupervised(x_train)
     confusion_valid = test_epoch(x_valid, targets_valid)
     confusion_test = test_epoch(x_test, targets_test)
 
     if any(np.isnan(losses_train)) or any(np.isinf(losses_train)):
-        with open(out_file, 'w') as f:
+        with open(output_file, 'w') as f:
             f.write('*NAN')
         break
 
@@ -400,12 +389,12 @@ for epoch in range(num_epochs):
     test_acc_cur = confusion_test.accuracy()
 
     if epoch > 3 and train_acc_cur < 0.1:
-        with open(out_file, 'a') as f:
+        with open(output_file, 'a') as f:
             f.write('*No progress')
         break
 
     if epoch > 30 and train_acc_cur < 0.5:
-        with open(out_file, 'a') as f:
+        with open(output_file, 'a') as f:
             f.write('*slow progres')
         break
 
@@ -419,6 +408,6 @@ for epoch in range(num_epochs):
         epoch, np.mean(losses_train), train_acc_cur, valid_acc_cur,
         test_acc_cur, sh_lr.get_value(), *layer_costs)
     print s
-    with open(out_file, 'a') as f:
+    with open(output_file, 'a') as f:
         f.write(s + "\n")
 
