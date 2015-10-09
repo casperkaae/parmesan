@@ -25,7 +25,7 @@ Work in progress. At the moment Parmesan primarily includes
 * Layers for constructing Ladder Networks in *parmesan/layers/ladderlayers.py*
 * Layers for implementing normalizing flows in *parmesan/layers/flow.py*
 
-Please see these for further details. Further see the examples section below for working examples.
+Please see the source code and code examples for further details.
 
 Examples
 -------------
