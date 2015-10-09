@@ -36,7 +36,7 @@ parser.add_argument("-nflows", type=int,
 parser.add_argument("-batch_size", type=int,
         help="batch size", default=250)
 parser.add_argument("-eval_epoch", type=int,
-        help="epochs between evaluation of test performance", default=1)
+        help="epochs between evaluation of test performance", default=10)
 
 
 args = parser.parse_args()
