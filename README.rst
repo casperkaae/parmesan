@@ -8,10 +8,12 @@ Parmesan depends heavily on the [Lasagne](https://github.com/Lasagne/Lasagne) an
 
 Install using pip
 .. code-block:: bash
+
   pip install https://github.com/casperkaae/parmesan.git --user --no-deps
 
 Install from source
 .. code-block:: bash
+
   git clone https://github.com/casperkaae/parmesan.git
   cd parmesan
   python setup.py develop
