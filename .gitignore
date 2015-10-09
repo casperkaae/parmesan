@@ -1,6 +1,6 @@
 
 *.pyc
-Parmasan.egg-info/
+*.egg-info/
 examples/results/
 examples/outfolder/
 *.log

@@ -39,7 +39,7 @@ Examples
 **Usage example**:
 Below is an image of the log-likelihood terms training an importance weighted autoencoder on MNIST with one sample over Eq and one importance weighted sample.
 The test performance was evaluated using 5000 importance weighted samples and be should be directly comparable to the results in Burda et. al.
-The final test performance is LL=-84.78 which is better than the current best published results at LL=-86.76 reported in Burda et. al. al table 1 (compare to top 1st row and 4th row in column IVAE since we are training using a single importance weighted sample)).
+The final test performance is LL=-84.78 which is better than the current best published results at LL=-86.76 reported in Burda et. al. al table 1 (compare to top 1st row and 4th row in column IWAE since we are training using a single importance weighted sample)).
 
 
 .. image:: https://raw.githubusercontent.com/casperkaae/parmesan/master/misc/eval_L5000.png
