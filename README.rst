@@ -1,12 +1,14 @@
 Parmesan
 =======
-Parmesan is a library adding variational and semi-supervised neural network models to `Lasagne<https://github.com/Lasagne/Lasagne>`_.
+Parmesan is a library adding variational and semi-supervised neural network models to `Lasagne
+<http://github.com/Lasagne/Lasagne>`_
 
 Installation
 ------------
-Parmesan depends heavily on the `Lasagne<https://github.com/Lasagne/Lasagne>`_. and `Theano<http://deeplearning.net/software/theano>`_. libraries. Make sure these are installed
-`Lasagne
-<http://github.com/Lasagne/Lasagne>`_
+Parmesan depends heavily on the `Lasagne
+<http://github.com/Lasagne/Lasagne>`_. and
+`Theano
+<http://deeplearning.net/software/theano>`_. libraries.
 
 .. code-block:: bash
 
