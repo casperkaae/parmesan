@@ -7,15 +7,13 @@ Installation
 Parmesan depends heavily on the [Lasagne](https://github.com/Lasagne/Lasagne) and [Theano](http://deeplearning.net/software/theano/) libraries. Make sure these are installed
 
 Install using pip
+
 .. code-block:: bash
 
   pip install https://github.com/casperkaae/parmesan.git --user --no-deps
 
 
 Install from source
-```
-  lalalal
-```
 
 .. code-block:: bash
 
