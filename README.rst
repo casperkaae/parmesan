@@ -36,6 +36,17 @@ Examples
 * **examples/iw_vae_normflow.py**: Variational autoencoder using normalizing flows and importance sampling as described in Burda. et. al. 2015 and Rezende et al. 2015
 * **examples/mnist_ladder.py**: Semi-supervised Ladder Network as described in Rasmus et. al. 2015
 
+Below is an image of the log-likelihood terms training an importance weighted autoencoder on MNIST with one sample over Eq and one importance sample.
+The test performance was evaluated using 5000 importance samples and be should directly comparable to the results in table 1 (top row, IVAE) in Burda et. al.
+The final test performance is LL=-84.78 compared to LL=-86.76 reported in Burda et. al.
+
+![iw_vae](https://github.com/casperkaae/parmesan/blob/master/misc/eval_L5000.jpg)
+
+The results can be reproduced by
+
+.. code-block:: bash
+  python iw_vae.py -eqsamples 1 -iw_samples 1 -lr 0.001 -nhidden 500 -nlatent 100 -nonlin_dec very_leaky_rectify -nonlin_enc rectify
+
 
 Development
 -----------
