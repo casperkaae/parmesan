@@ -28,15 +28,15 @@ parser.add_argument("-nonlin_enc", type=str,
 parser.add_argument("-nonlin_dec", type=str,
         help="nonlin decoder", default="rectify")
 parser.add_argument("-nhidden", type=int,
-        help="number of hidden units in determistic layers", default=200)
+        help="number of hidden units in determistic layers", default=100)
 parser.add_argument("-nlatent", type=int,
         help="number of stochastic latent units", default=50)
 parser.add_argument("-nflows", type=int,
-        help="length of normalizing flow", default=10)
+        help="length of normalizing flow", default=5)
 parser.add_argument("-batch_size", type=int,
         help="batch size", default=250)
 parser.add_argument("-eval_epoch", type=int,
-        help="ePochs between evaluation of test performance", default=250)
+        help="epochs between evaluation of test performance", default=1)
 
 
 args = parser.parse_args()
