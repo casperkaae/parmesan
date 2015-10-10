@@ -14,7 +14,7 @@ import shutil, gzip, os, cPickle, time, math, operator, argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-dataset", type=str,
-        help="real or binarized MNIST, real|binarized", default="binarized")
+        help="real or binarized MNIST, real|binarized", default="real")
 parser.add_argument("-eqsamples", type=int,
         help="samples over Eq", default=1)
 parser.add_argument("-iw_samples", type=int,
