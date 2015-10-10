@@ -2,6 +2,7 @@
 *.pyc
 *.egg-info/
 examples/results/
+examples/data/
 examples/outfolder/
 *.log
 

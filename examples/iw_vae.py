@@ -8,11 +8,13 @@ import theano.tensor as T
 import numpy as np
 import lasagne
 from parmesan.layers import SampleLayer
-from parmesan.datasets import load_mnist_realval
+from parmesan.datasets import load_mnist_realval, load_mnist_binarized
 import matplotlib.pyplot as plt
 import shutil, gzip, os, cPickle, time, math, operator, argparse
 
 parser = argparse.ArgumentParser()
+parser.add_argument("-dataset", type=str,
+        help="real or binarized MNIST, real|binarized", default="binarized")
 parser.add_argument("-eqsamples", type=int,
         help="samples over Eq", default=1)
 parser.add_argument("-iw_samples", type=int,
@@ -55,10 +57,13 @@ nonlin_enc = get_nonlin(args.nonlin_enc)
 nonlin_dec = get_nonlin(args.nonlin_dec)
 nhidden = args.nhidden
 latent_size = args.nlatent
+dataset = args.dataset
 batch_size = args.batch_size
 num_epochs = 10000
 batch_size_test = 50
 eval_epoch = args.eval_epoch
+
+assert dataset in ['real','binarized'], "dataset must be real|binarized"
 
 ### SET UP LOGFILE AND OUTPUT FOLDER
 if not os.path.exists(res_out):
@@ -107,17 +112,28 @@ def normal2(x, mean, logvar):
 def standard_normal(x):
     return c - x**2 / 2
 
+
 def bernoullisample(x):
     return np.random.binomial(1,x,size=x.shape).astype(theano.config.floatX)
 
 
 ### LOAD DATA AND SET UP SHARED VARIABLES
-train_x, train_t, valid_x, valid_t, test_x, test_t = load_mnist_realval()
+if dataset is 'real':
+    print "Using real valued MNIST dataset to binomial sample dataset after every epoch "
+    train_x, train_t, valid_x, valid_t, test_x, test_t = load_mnist_realval()
+    del train_t, valid_t, test_t
+    preprocesses_dataset = lambda dataset: dataset #just a dummy function
+else:
+    print "Using fixed binarized MNIST data"
+    train_x, valid_x, test_x = load_mnist_binarized()
+    preprocesses_dataset = bernoullisample
+
+
 train_x = np.concatenate([train_x,valid_x])
 num_features=train_x.shape[-1]
 
-sh_x_train = theano.shared(np.asarray(bernoullisample(train_x), dtype=theano.config.floatX), borrow=True)
-sh_x_test = theano.shared(np.asarray(bernoullisample(test_x), dtype=theano.config.floatX), borrow=True)
+sh_x_train = theano.shared(np.asarray(preprocesses_dataset(train_x), dtype=theano.config.floatX), borrow=True)
+sh_x_test = theano.shared(np.asarray(preprocesses_dataset(test_x), dtype=theano.config.floatX), borrow=True)
 
 #dummy test data for testing the implementation
 X = np.ones((batch_size,784),dtype='float32')
@@ -286,7 +302,7 @@ for epoch in range(1,num_epochs):
 
     #shuffle train data and train model
     np.random.shuffle(train_x)
-    sh_x_train.set_value(bernoullisample(train_x))
+    sh_x_train.set_value(preprocesses_dataset(train_x))
     train_out = train_epoch(lr,eq_samples, iw_samples)
 
 

@@ -57,7 +57,7 @@ Development
 -----------
 Parmesan is work in progress, inputs, contributions and bug reports are very welcome.
 
-The library was developed by
+The library is developed by
     * Casper Kaae Sønderby
     * Søren Kaae Sønderby
     * Lars Maaløe
