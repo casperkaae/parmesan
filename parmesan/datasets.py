@@ -4,7 +4,6 @@ import gzip
 import tarfile
 import fnmatch
 import os
-import cPickle
 import urllib
 
 
@@ -14,6 +13,7 @@ def _unpickle(f):
     d = cPickle.load(fo)
     fo.close()
     return d
+
 
 def _download_mnist_realval(dataset):
     """
@@ -25,6 +25,7 @@ def _download_mnist_realval(dataset):
     )
     print 'Downloading data from %s' % origin
     urllib.urlretrieve(origin, dataset)
+
 
 def _download_mnist_binarized(datapath):
     """
@@ -156,4 +157,3 @@ def cifar10(datasets_dir=_get_datafolder_path(), num_val=5000):
                 x_test, targets_test)
     else:
         return x_train, targets_train, x_test, targets_test
-
