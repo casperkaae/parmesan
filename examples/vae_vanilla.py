@@ -128,7 +128,7 @@ updates = lasagne.updates.adam(cgrads, params, learning_rate=sym_lr)
 train_model = theano.function([sym_batch_index, sym_lr], LL_train, updates=updates,
                                   givens={sym_x: sh_x_train[batch_slice], },)
 
-test_model = theano.function([sym_batch_index], LL_train,
+test_model = theano.function([sym_batch_index], LL_eval,
                                   givens={sym_x: sh_x_test[batch_slice], },)
 
 
