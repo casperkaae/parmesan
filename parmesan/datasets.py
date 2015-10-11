@@ -1,15 +1,71 @@
-import theano
 import numpy as np
 import pickle as pkl
 import gzip
 import tarfile
 import fnmatch
 import os
-import cPickle
+import urllib
 
 
-def load_mnist_realval():
-    f = gzip.open('mnist.pkl.gz', 'rb')
+def _unpickle(f):
+    import cPickle
+    fo = open(f, 'rb')
+    d = cPickle.load(fo)
+    fo.close()
+    return d
+
+
+def _download_mnist_realval(dataset):
+    """
+    Download the MNIST dataset if it is not present.
+    :return: The train, test and validation set.
+    """
+    origin = (
+        'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
+    )
+    print 'Downloading data from %s' % origin
+    urllib.urlretrieve(origin, dataset)
+
+
+def _download_mnist_binarized(datapath):
+    """
+    Download the fized binzarized MNIST dataset if it is not present.
+    :return: The train, test and validation set.
+    """
+    datafiles = {
+        "train": "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_train.amat",
+        "valid": "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_valid.amat",
+        "test": "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_test.amat"
+    }
+    datasplits = {}
+    for split in datafiles.keys():
+        print "Downloading %s data..." %(split)
+        local_file = datapath + '/binarized_mnist_%s.npy'%(split)
+        datasplits[split] = np.loadtxt(urllib.urlretrieve(datafiles[split])[0])
+
+    f = gzip.open(datapath +'/mnist.pkl.gz', 'w')
+    pkl.dump([datasplits['train'],datasplits['valid'],datasplits['test']],f)
+
+
+def _get_datafolder_path():
+    full_path = os.path.abspath('.')
+    path = full_path +'/data'
+    return path
+
+
+def load_mnist_realval(dataset=_get_datafolder_path()+'/mnist_real/mnist.pkl.gz'):
+    '''
+    Loads the real valued MNIST dataset
+    :param dataset: path to dataset file
+    :return: None
+    '''
+    if not os.path.isfile(dataset):
+        datasetfolder = os.path.dirname(dataset)
+        if not os.path.exists(datasetfolder):
+            os.makedirs(datasetfolder)
+        _download_mnist_realval(dataset)
+
+    f = gzip.open(dataset, 'rb')
     train_set, valid_set, test_set = pkl.load(f)
     f.close()
     x_train, targets_train = train_set[0], train_set[1]
@@ -18,7 +74,25 @@ def load_mnist_realval():
     return x_train, targets_train, x_valid, targets_valid, x_test, targets_test
 
 
-def cifar10(datasets_dir='data', num_val=5000):
+def load_mnist_binarized(dataset=_get_datafolder_path()+'/mnist_binarized/mnist.pkl.gz'):
+    '''
+    Loads the fixed binarized MNIST dataset provided by Hugo Larochelle.
+    :param dataset: path to dataset file
+    :return: None
+    '''
+    if not os.path.isfile(dataset):
+        datasetfolder = os.path.dirname(dataset)
+        if not os.path.exists(datasetfolder):
+            os.makedirs(datasetfolder)
+        _download_mnist_binarized(datasetfolder)
+
+    f = gzip.open(dataset, 'rb')
+    x_train, x_valid, x_test = pkl.load(f)
+    f.close()
+    return x_train, x_valid, x_test
+
+
+def cifar10(datasets_dir=_get_datafolder_path(), num_val=5000):
     raise Warning('cifar10 loader is untested!')
     # this code is largely cp from Kyle Kastner:
     #
@@ -52,7 +126,7 @@ def cifar10(datasets_dir='data', num_val=5000):
 
     x_train, targets_train = [], []
     for f in train_files:
-        d = unpickle(f)
+        d = _unpickle(f)
         x_train.append(d['data'])
         targets_train.append(d['labels'])
     x_train = np.array(x_train, dtype='uint8')
@@ -61,7 +135,7 @@ def cifar10(datasets_dir='data', num_val=5000):
     targets_train = np.array(targets_train)
     targets_train = targets_train.ravel()
 
-    d = unpickle(test_file)
+    d = _unpickle(test_file)
     x_test = d['data']
     targets_test = d['labels']
     x_test = np.array(x_test, dtype='uint8')
@@ -83,11 +157,3 @@ def cifar10(datasets_dir='data', num_val=5000):
                 x_test, targets_test)
     else:
         return x_train, targets_train, x_test, targets_test
-
-
-def unpickle(f):
-    import cPickle
-    fo = open(f, 'rb')
-    d = cPickle.load(fo)
-    fo.close()
-    return d
