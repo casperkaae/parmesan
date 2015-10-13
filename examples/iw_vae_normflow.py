@@ -197,7 +197,7 @@ def latent_gaussian_x_bernoulli(z, z_mu, psi_u_list, z_log_var, x_mu, x, eq_samp
 
     # dimshuffle x since we need to broadcast it when calculationg the binary
     # cross-entropy
-    x = x.dimshuffle(0,'x','x',1) # x: (batch_size, nsamples, ivae_samples, num_latent)
+    x = x.dimshuffle(0,'x','x',1) # x: (batch_size, eq_samples, iw_samples, num_latent)
 
     for i in range(len(psi_u_list)):
         psi_u_list[i] = psi_u_list[i].reshape((-1, eq_samples, iw_samples))

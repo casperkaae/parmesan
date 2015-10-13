@@ -12,11 +12,11 @@ import time, shutil, os
 
 
 #settings
-batch_size = 250
-nhidden = 100
-latent_size = 250
+batch_size = 128
+nhidden = 500
+latent_size = 100
 analytic_kl_term = False
-lr = 0.005
+lr = 0.001
 num_epochs = 1000
 results_out = 'results/vae_vanilla/'
 

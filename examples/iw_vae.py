@@ -175,7 +175,7 @@ def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, eq_samples, iw_samp
 
     # dimshuffle x since we need to broadcast it when calculationg the binary
     # cross-entropy
-    x = x.dimshuffle(0,'x','x',1) # x: (batch_size, nsamples, ivae_samples, num_latent)
+    x = x.dimshuffle(0,'x','x',1) # x: (batch_size, eq_samples, iw_samples, num_latent)
 
     #calculate LL components, note that we sum over the feature/num_unit dimension
     z_mu = z_mu.dimshuffle(0,'x','x',1) # mean: (batch_size, num_latent)
