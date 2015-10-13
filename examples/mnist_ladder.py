@@ -82,6 +82,8 @@ num_classes = 10
 batch_size = 100  # fails if batch_size != batch_size
 num_labels = 100
 
+np.random.seed(1234) # reproducibility
+
 output_folder = "logs/mnist_ladder" + str(uuid.uuid4())[:18].replace('-', '_')
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)

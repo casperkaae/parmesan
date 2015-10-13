@@ -3,9 +3,9 @@
 import theano
 theano.config.floatX = 'float32'
 import theano.tensor as T
-import lasagne
 import numpy as np
-from parmesan.distributions import logstandard_normal, lognormal2
+import lasagne
+from parmesan.distributions import log_stdnormal, log_normal2, log_bernoulli, kl_normal2_stdnormal
 from parmesan.layers import SimpleSampleLayer
 from parmesan.datasets import load_mnist_realval
 import time, shutil, os
@@ -13,12 +13,16 @@ import time, shutil, os
 
 #settings
 batch_size = 250
+nhidden = 100
 latent_size = 250
+analytic_kl_term = False
 lr = 0.005
 num_epochs = 1000
 results_out = 'results/vae_vanilla/'
 
-# Setup outputfolder logfie etc.
+np.random.seed(1234) # reproducibility
+
+# Setup outputfolder logfile etc.
 if not os.path.exists(results_out):
     os.makedirs(results_out)
 scriptpath = os.path.realpath(__file__)
@@ -53,19 +57,19 @@ sh_x_test = theano.shared(np.asarray(bernoullisample(test_x), dtype=theano.confi
 
 ### RECOGNITION MODEL q(z|x)
 l_in = lasagne.layers.InputLayer((batch_size, nfeatures))
-l_enc_h1 = lasagne.layers.DenseLayer(l_in, num_units=100, name='ENC_DENSE1')
-l_enc_h1 = lasagne.layers.DenseLayer(l_enc_h1, num_units=100, name='ENC_DENSE2')
+l_enc_h1 = lasagne.layers.DenseLayer(l_in, num_units=nhidden, nonlinearity=lasagne.nonlinearities.rectify, name='ENC_DENSE1')
+l_enc_h1 = lasagne.layers.DenseLayer(l_enc_h1, num_units=nhidden, nonlinearity=lasagne.nonlinearities.rectify, name='ENC_DENSE2')
 
-l_mu = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_MU')
-l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_LOG_VAR')
+l_mu = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_Z_MU')
+l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_Z_LOG_VAR')
 
 #sample the latent variables using mu(x) and log(sigma^2(x))
 l_z = SimpleSampleLayer(mu=l_mu, log_var=l_log_var)
 
 ### GENERATIVE MODEL p(x|z)
-l_dec_h1 = lasagne.layers.DenseLayer(l_z, num_units=100, name='DEC_DENSE2')
-l_dec_h1 = lasagne.layers.DenseLayer(l_dec_h1, num_units=100, name='DEC_DENSE1')
-l_dec_x_mu = lasagne.layers.DenseLayer(l_dec_h1, num_units=nfeatures, nonlinearity=lasagne.nonlinearities.sigmoid, name='DEC_Xmu')
+l_dec_h1 = lasagne.layers.DenseLayer(l_z, num_units=nhidden, nonlinearity=lasagne.nonlinearities.rectify, name='DEC_DENSE2')
+l_dec_h1 = lasagne.layers.DenseLayer(l_dec_h1, num_units=nhidden, nonlinearity=lasagne.nonlinearities.rectify, name='DEC_DENSE1')
+l_dec_x_mu = lasagne.layers.DenseLayer(l_dec_h1, num_units=nfeatures, nonlinearity=lasagne.nonlinearities.sigmoid, name='DEC_X_MU')
 
 
 # Get outputs from model
@@ -81,7 +85,7 @@ z_eval, z_mu_eval, z_log_var_eval, x_mu_eval = lasagne.layers.get_output(
 
 
 #Calculate the loglikelihood(x) = E_q[ log(x|z) + p(z) - q(z|x)]
-def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x, x_mu):
+def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x, x_mu, analytic_kl_term):
     """
     Latent z       : gaussian with standard normal prior
     decoder output : bernoulli
@@ -89,19 +93,24 @@ def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x, x_mu):
     When the output is bernoulli then the output from the decoder
     should be sigmoid.
     """
-    log_qz_given_x = lognormal2(z, z_mu, z_log_var).sum(axis=1)
-    log_pz = logstandard_normal(z).sum(axis=1)
-    log_px_given_z = T.sum(-T.nnet.binary_crossentropy(x_mu, x), axis=1)
-    LL = T.mean(log_pz + log_px_given_z - log_qz_given_x)
+    if analytic_kl_term:
+        kl_term = kl_normal2_stdnormal(z_mu, z_log_var).sum(axis=1)
+        log_px_given_z = log_bernoulli(x, x_mu).sum(axis=1)
+        LL = T.mean(-kl_term + log_px_given_z)
+    else:
+        log_qz_given_x = log_normal2(z, z_mu, z_log_var).sum(axis=1)
+        log_pz = log_stdnormal(z).sum(axis=1)
+        log_px_given_z = log_bernoulli(x, x_mu).sum(axis=1)
+        LL = T.mean(log_pz + log_px_given_z - log_qz_given_x)
     return LL
 
 # TRAINING LogLikelihood
 LL_train = latent_gaussian_x_bernoulli(
-    z_train, z_mu_train, z_log_var_train, sym_x, x_mu_train)
+    z_train, z_mu_train, z_log_var_train, sym_x, x_mu_train, analytic_kl_term)
 
 # EVAL LogLikelihood
 LL_eval = latent_gaussian_x_bernoulli(
-    z_eval, z_mu_eval, z_log_var_eval, sym_x, x_mu_eval)
+    z_eval, z_mu_eval, z_log_var_eval, sym_x, x_mu_eval, analytic_kl_term)
 
 
 params = lasagne.layers.get_all_params([l_dec_x_mu], trainable=True)
