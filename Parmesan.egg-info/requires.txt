@@ -1,8 +1,0 @@
-numpy
-lasagne
-
-[testing]
-mock
-pytest
-pytest-cov
-pytest-pep8
