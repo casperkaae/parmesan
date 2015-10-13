@@ -50,7 +50,7 @@ The results can be reproduced by running
 
 .. code-block:: bash
 
-  python examples/iw_vae.py -eqsamples 1 -iw_samples 1 -lr 0.001 -nhidden 500 -nlatent 100 -nonlin_dec very_leaky_rectify -nonlin_enc rectify
+  python examples/iw_vae.py -eq_samples 1 -iw_samples 1 -lr 0.001 -nhidden 500 -nlatent 100 -nonlin_dec very_leaky_rectify -nonlin_enc rectify
 
 
 Development

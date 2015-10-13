@@ -9,6 +9,7 @@ matplotlib.use('Agg')
 import theano.tensor as T
 import numpy as np
 import lasagne
+from parmesan.distributions import log_stdnormal, log_normal2, log_bernoulli
 from parmesan.layers import SampleLayer, NormalizingPlanarFlowLayer, ListIndexLayer
 from parmesan.datasets import load_mnist_realval, load_mnist_binarized
 import matplotlib.pyplot as plt
@@ -17,7 +18,7 @@ import shutil, gzip, os, cPickle, time, math, operator, argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("-dataset", type=str,
         help="real or binarized MNIST, real|binarized", default="real")
-parser.add_argument("-eqsamples", type=int,
+parser.add_argument("-eq_samples", type=int,
         help="samples over Eq", default=1)
 parser.add_argument("-iw_samples", type=int,
         help="iw_samples", default=1)
@@ -53,8 +54,8 @@ def get_nonlin(nonlin):
     else:
         raise ValueError()
 
-iw_samples = args.iw_samples   #number of MC samples over the expectation over E_q(z|x)
-eq_samples = args.eqsamples    #number of importance weighted samples
+iw_samples = args.iw_samples   #number of importance weighted samples
+eq_samples = args.eq_samples   #number of MC samples over the expectation over E_q(z|x)
 lr = args.lr
 res_out = args.outfolder
 nonlin_enc = get_nonlin(args.nonlin_enc)
@@ -69,6 +70,8 @@ batch_size_test = 50
 eval_epoch = args.eval_epoch
 
 assert dataset in ['real','binarized'], "dataset must be real|binarized"
+
+np.random.seed(1234) # reproducibility
 
 ### SET UP LOGFILE AND OUTPUT FOLDER
 if not os.path.exists(res_out):
@@ -99,23 +102,6 @@ sym_eq_samples = T.iscalar('eq_samples')
 sym_lr = T.scalar('lr')
 sym_x = T.matrix('x')
 
-
-c = - 0.5 * math.log(2*math.pi)
-def normal(x, mean, sd):
-    return c - T.log(T.abs_(sd)) - (x - mean)**2 / (2 * sd**2)
-
-def normal2(x, mean, logvar):
-    '''
-    x: (batch_size, nsamples, ivae_samples, num_latent)
-    mean: (batch_size, num_latent)
-    logvar: (batch_size, num_latent)
-    '''
-    mean = mean.dimshuffle(0,'x','x',1)
-    logvar = logvar.dimshuffle(0,'x','x',1)
-    return c - logvar/2 - (x - mean)**2 / (2 * T.exp(logvar))
-
-def standard_normal(x):
-    return c - x**2 / 2
 
 def bernoullisample(x):
     return np.random.binomial(1,x,size=x.shape).astype(theano.config.floatX)
@@ -211,16 +197,18 @@ def latent_gaussian_x_bernoulli(z, z_mu, psi_u_list, z_log_var, x_mu, x, eq_samp
 
     # dimshuffle x since we need to broadcast it when calculationg the binary
     # cross-entropy
-    x = x.dimshuffle((0,'x','x',1))
+    x = x.dimshuffle(0,'x','x',1) # x: (batch_size, eq_samples, iw_samples, num_latent)
 
     for i in range(len(psi_u_list)):
         psi_u_list[i] = psi_u_list[i].reshape((-1, eq_samples, iw_samples))
 
 
     #calculate LL components, note that we sum over the feature/num_unit dimension
-    log_qz_given_x = normal2(z, z_mu, z_log_var).sum(axis=3)
-    log_pz = standard_normal(z).sum(axis=3)
-    log_px_given_z = T.sum(-T.nnet.binary_crossentropy(T.clip(x_mu,epsilon,1-epsilon), x), axis=3)
+    z_mu = z_mu.dimshuffle(0,'x','x',1) # mean: (batch_size, num_latent)
+    z_log_var = z_log_var.dimshuffle(0,'x','x',1) # logvar: (batch_size, num_latent)
+    log_qz_given_x = log_normal2(z, z_mu, z_log_var).sum(axis=3)
+    log_pz = log_stdnormal(z).sum(axis=3)
+    log_px_given_z = log_bernoulli(x, T.clip(x_mu,epsilon,1-epsilon)).sum(axis=3)
 
     #normalizing flow loss
     sum_log_psiu = 0
