@@ -40,7 +40,7 @@ setup(
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         ],
     keywords="",
-    author="Parmasan contributors",
+    author="Parmesan contributors",
     author_email="parmesan-users@googlegroups.com",
     url="https://github.com/casperkaae/parmesan",
     license="MIT",

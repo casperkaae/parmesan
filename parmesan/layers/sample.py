@@ -10,15 +10,15 @@ class SimpleSampleLayer(lasagne.layers.MergeLayer):
 
     Parameters
     ----------
-    mu, log_var : class:`Layer` instances
+    mu, log_var : :class:`Layer` instances
         Parameterizing the mean and log(variance) of the distribution to sample
         from as described in [KINGMA]_. The code assumes that these have the
-        same number of dimensions
+        same number of dimensions.
 
     References
     ----------
         ..  [KINGMA] Kingma, Diederik P., and Max Welling.
-            "Auto-encoding variational bayes."
+            "Auto-Encoding Variational Bayes."
             arXiv preprint arXiv:1312.6114 (2013).
     """
     def __init__(self, mu, log_var, **kwargs):
@@ -39,30 +39,29 @@ class SimpleSampleLayer(lasagne.layers.MergeLayer):
 
 class SampleLayer(lasagne.layers.MergeLayer):
     """
-    Samplelayer supporting importance sampling as described in [BURDA]_ and
-    multiple monte carlo samples for the approximation of
-    E_q [log( p(x,z) / q(z|x) )]
+    Sampling layer supporting importance sampling as described in [BURDA]_ and
+    multiple Monte Carlo samples for the approximation of
+    E_q [log( p(x,z) / q(z|x) )].
 
     Parameters
     ----------
-    mu, log_var : class:`Layer` instances
+    mu, log_var : :class:`Layer` instances
         Parameterizing the mean and log(variance) of the distribution to sample
-        from as described in [BURDA]. The code assumes that these have the same
-        number of dimensions
+        from as described in [BURDA]_. The code assumes that these have the same
+        number of dimensions.
 
-    eq_samples: Int or T.scalar
+    eq_samples : int or T.scalar
         Number of Monte Carlo samples used to estimate the expectation over
-        q(z|x) in eq. (8) in [BURDA]
+        q(z|x) in eq. (8) in [BURDA]_.
 
-    iw_samples: Int or T.scalar
-        Number of importance samples in the sum over k in eq. (8) in [BURDA]
+    iw_samples : int or T.scalar
+        Number of importance samples in the sum over k in eq. (8) in [BURDA]_.
 
     References
     ----------
         ..  [BURDA] Burda, Yuri, Roger Grosse, and Ruslan Salakhutdinov.
             "Importance Weighted Autoencoders."
             arXiv preprint arXiv:1509.00519 (2015).
-
     """
 
     def __init__(self, mu, log_var, eq_samples=1, iw_samples=1, **kwargs):
@@ -73,7 +72,6 @@ class SampleLayer(lasagne.layers.MergeLayer):
 
         self._srng = RandomStreams(
             lasagne.random.get_rng().randint(1, 2147462579))
-
 
     def get_output_shape_for(self, input_shapes):
         batch_size, num_latent = input_shapes[0]
