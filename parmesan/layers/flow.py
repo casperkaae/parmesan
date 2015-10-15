@@ -4,36 +4,33 @@ import numpy as np
 
 class NormalizingPlanarFlowLayer(lasagne.layers.Layer):
     """
-    Normalizing Planer Flow Layer as described in Rezende et.
-    al. [REZENDE] (Equation numbers and appendixes refers to this paper)
+    Normalizing Planar Flow Layer as described in Rezende et
+    al. [REZENDE]_ (Equation numbers and appendixes refers to this paper)
     Eq. (8) is used for calculating the forward transformation f(z).
     The last term of eq. (13) is also calculated within this layer and
-    returned as an output for computational reasons. Further the
+    returned as an output for computational reasons. Furthermore, the
     transformation is ensured to be invertible using the constrains
     described in appendix A.1
-
 
     Parameters
     ----------
     incoming : a :class:`Layer` instance or a tuple
-    The layer feeding into this layer, or the expected input shape
-
+        The layer feeding into this layer, or the expected input shape
     u,w : Theano shared variable, numpy array or callable
-    An initializer for the weights of the layer. If a shared variable or a
-    numpy array is provided the shape should  be (num_inputs, num_units).
-    See :meth:`Layer.create_param` for more information.
-
+        An initializer for the weights of the layer. If a shared variable or a
+        numpy array is provided the shape should be (num_inputs, num_units).
+        See :meth:`Layer.create_param` for more information.
     b : Theano shared variable, numpy array, callable or None
-    An initializer for the biases of the layer. If a shared variable or a
-    numpy array is provided the shape should be (num_units,).
-    If None is provided the layer will have no biases.
-    See :meth:`Layer.create_param` for more information.
+        An initializer for the biases of the layer. If a shared variable or a
+        numpy array is provided the shape should be (num_units,).
+        If None is provided the layer will have no biases.
+        See :meth:`Layer.create_param` for more information.
 
     References
-    -----------
-    [REZENDE] Rezende, Danilo Jimenez, and Shakir Mohamed.
-    "Variational Inference with Normalizing Flows."
-    arXiv preprint arXiv:1505.05770 (2015).
+    ----------
+        ..  [REZENDE] Rezende, Danilo Jimenez, and Shakir Mohamed.
+            "Variational Inference with Normalizing Flows."
+            arXiv preprint arXiv:1505.05770 (2015).
     """
     def __init__(self, incoming, u=lasagne.init.Normal(),
                  w=lasagne.init.Normal(),

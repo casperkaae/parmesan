@@ -5,9 +5,9 @@ import theano.tensor as T
 c = - 0.5 * math.log(2*math.pi)
 def log_normal(x, mean, sd):
     """
-    Compute log pdf of a Gaussian distribution with digonal covariance, at values x.
+    Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
 
-        .. math:: \log p(x) = \log \mathcal{N}(x; \mu, I\sigma^2)
+        .. math:: \log p(x) = \log \mathcal{N}(x; \mu, \sigma^2I)
     
     Parameters
     ----------
@@ -27,10 +27,10 @@ def log_normal(x, mean, sd):
 
 def log_normal2(x, mean, logvar):
     """
-    Compute log pdf of a Gaussian distribution with digonal covariance, at values x.
+    Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
     Here variance is parameterized in the log domain, which ensures :math:`\sigma > 0`.
 
-        .. math:: \log p(x) = \log \mathcal{N}(x; \mu, I\sigma^2)
+        .. math:: \log p(x) = \log \mathcal{N}(x; \mu, \sigma^2I)
     
     Parameters
     ----------
@@ -91,13 +91,13 @@ def kl_normal2_stdnormal(mean, logvar):
     Compute analytically integrated KL-divergence between a diagonal covariance Gaussian and 
     a standard Gaussian.
 
-    In the setting of the variational auto-encoder, when a Gaussian prior and diagonal Gaussian 
+    In the setting of the variational autoencoder, when a Gaussian prior and diagonal Gaussian 
     approximate posterior is used, this analytically integrated KL-divergence term yields a lower variance 
-    estimate of the likelihood lower bound compared to computing the term by Monte Carlo approxmation.
+    estimate of the likelihood lower bound compared to computing the term by Monte Carlo approximation.
 
         .. math:: D_{KL}[q_{\phi}(z|x) || p_{\theta}(z)]
 
-    See appendix D of [KINGMA]_ for details.
+    See appendix B of [KINGMA]_ for details.
 
     Parameters
     ----------
@@ -114,7 +114,7 @@ def kl_normal2_stdnormal(mean, logvar):
     References
     ----------
         ..  [KINGMA] Kingma, Diederik P., and Max Welling.
-            "Auto-encoding variational bayes."
+            "Auto-Encoding Variational Bayes."
             arXiv preprint arXiv:1312.6114 (2013).
 
     """

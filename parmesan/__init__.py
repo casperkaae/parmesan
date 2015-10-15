@@ -9,7 +9,7 @@ except ImportError:  # pragma: no cover
 
 Please make sure you install a recent enough version of Theano.  See
 section 'Install from PyPI' in the installation docs for more details:
-http://parmasan.readthedocs.org/en/latest/user/installation.html#install-from-pypi
+http://parmesan.readthedocs.org/en/latest/user/installation.html#install-from-pypi
 """)
 else:
     del theano

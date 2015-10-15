@@ -1,4 +1,4 @@
-# Implements an variational autencoder as described in Kingma et al. 2013
+# Implements a variational autoencoder as described in Kingma et al. 2013
 # "Auto-Encoding Variational Bayes"
 import theano
 theano.config.floatX = 'float32'

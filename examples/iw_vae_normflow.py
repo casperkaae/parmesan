@@ -1,6 +1,6 @@
-# This code implementents an variational autoencoder using importance weighted
-# sampling as described in Burda et. al. 2015 "Importance Weighted Autoencoders"
-# and the planar normalizing flow described in Rezende et. al. 2015
+# This code implementents a variational autoencoder using importance weighted
+# sampling as described in Burda et al. 2015 "Importance Weighted Autoencoders"
+# and the planar normalizing flow described in Rezende et al. 2015
 # "Variational Inference with Normalizing Flows"
 import theano
 theano.config.floatX = 'float32'

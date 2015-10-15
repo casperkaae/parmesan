@@ -31,15 +31,15 @@ Please see the source code and code examples for further details.
 
 Examples
 -------------
-* **examples/vae_vanilla.py**: Variational autoencoder as described in Kingma. et. al. 2013
-* **examples/iw_vae.py**: Variational autoencoder using importance sampling as described in Burda. et. al. 2015
-* **examples/iw_vae_normflow.py**: Variational autoencoder using normalizing flows and importance sampling as described in Burda. et. al. 2015 and Rezende et al. 2015
-* **examples/mnist_ladder.py**: Semi-supervised Ladder Network as described in Rasmus et. al. 2015
+* **examples/vae_vanilla.py**: Variational autoencoder as described in Kingma et al. 2013
+* **examples/iw_vae.py**: Variational autoencoder using importance sampling as described in Burda et al. 2015
+* **examples/iw_vae_normflow.py**: Variational autoencoder using normalizing flows and importance sampling as described in Burda et al. 2015 and Rezende et al. 2015
+* **examples/mnist_ladder.py**: Semi-supervised Ladder Network as described in Rasmus et al. 2015
 
 **Usage example**:
-Below is an image of the log-likelihood terms training an importance weighted autoencoder on MNIST using binomial sampling of the inputs before each epoch. The training is done using one Monte-carlo sample to approximate the expectations over q(z|x) and one importance weighted sample.
-The test performance was evaluated using 5000 importance weighted samples and be should be directly comparable to the results in Burda et. al.
-The final test performance is LL=-84.78 which is better than the current best published results at LL=-86.76 reported in Burda et. al. al table 1 (compare to top 1st row and 4th row in column IWAE since we are training using a single importance weighted sample)).
+Below is an image of the log-likelihood terms training an importance weighted autoencoder on MNIST using binomial sampling of the inputs before each epoch. The training is done using one Monte Carlo sample to approximate the expectations over q(z|x) and one importance weighted sample.
+The test performance was evaluated using 5000 importance weighted samples and be should be directly comparable to the results in Burda et al.
+The final test performance is LL=-84.78 which is better than the current best published results at LL=-86.76 reported in Burda et al. table 1 (compare to top 1st row and 4th row in column labeled IWAE since we are training using a single importance weighted sample)).
 
 
 .. image:: https://raw.githubusercontent.com/casperkaae/parmesan/master/misc/eval_L5000.png
