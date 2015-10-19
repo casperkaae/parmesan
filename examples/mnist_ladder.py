@@ -66,6 +66,8 @@ class RasmusInit(lasagne.init.Initializer):
                       np.sqrt(shape[0]))
 
 
+filename_script = os.path.basename(os.path.realpath(__file__))
+
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("-lambdas", type=str,
@@ -73,7 +75,7 @@ parser.add_argument("-lambdas", type=str,
 parser.add_argument("-lr", type=str, default='0.001')
 parser.add_argument("-optimizer", type=str, default='adam')
 parser.add_argument("-init", type=str, default='None')
-parser.add_argument("-initval", type=str, default='relu')
+parser.add_argument("-initval", type=str, default='None')
 parser.add_argument("-gradclip", type=str, default='1')
 args = parser.parse_args()
 
@@ -84,7 +86,7 @@ num_labels = 100
 
 np.random.seed(1234) # reproducibility
 
-output_folder = "logs/mnist_ladder" + str(uuid.uuid4())[:18].replace('-', '_')
+output_folder = os.path.join("results", os.path.splitext(filename_script)[0] + str(uuid.uuid4())[:18].replace('-', '_'))
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 output_file = os.path.join(output_folder, 'results.log')
@@ -107,10 +109,17 @@ optimizer = optimizers[args.optimizer]
 if args.init == 'None':  # default to antti rasmus init
     init = RasmusInit()
 else:
-    initval = float(args.initval)
-    inits = {'he': lasagne.init.HeUniform(initval),
-             'glorot': lasagne.init.GlorotUniform(initval),
-             'normal': lasagne.init.Normal(initval)}
+    if args.initval != 'None':
+        # if `-initval` is not `'None'` use it as first argument to Lasange initializer
+        initargs = [float(args.initval)]
+    else:
+        # use default arguments for Lasange initializers
+        initargs = []
+
+    inits = {'he': lasagne.init.HeUniform(*initargs),
+             'glorot': lasagne.init.GlorotUniform(*initargs),
+             'uniform': lasagne.init.Uniform(*initargs),
+             'normal': lasagne.init.Normal(*initargs)}
     init = inits[args.init]
 
 
