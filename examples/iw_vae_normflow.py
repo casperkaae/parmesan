@@ -118,7 +118,7 @@ if dataset is 'sample':
     print "Using real valued MNIST dataset to binomial sample dataset after every epoch "
     train_x, train_t, valid_x, valid_t, test_x, test_t = load_mnist_realval()
     del train_t, valid_t, test_t
-    preprocesses_dataset = lambda bernoullisample: bernoullisample
+    preprocesses_dataset = bernoullisample
 else:
     print "Using fixed binarized MNIST data"
     train_x, valid_x, test_x = load_mnist_binarized()
