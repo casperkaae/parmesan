@@ -15,35 +15,39 @@ from parmesan.datasets import load_mnist_realval, load_mnist_binarized
 import matplotlib.pyplot as plt
 import shutil, gzip, os, cPickle, time, math, operator, argparse
 
+filename_script = os.path.basename(os.path.realpath(__file__))
+
 parser = argparse.ArgumentParser()
 parser.add_argument("-dataset", type=str,
-        help="real or binarized MNIST, sample|binarized", default="sample")
+        help="sampled or fixed binarized MNIST, sample|fixed", default="sample")
 parser.add_argument("-eq_samples", type=int,
-        help="samples over Eq", default=1)
+        help="number of samples for the expectation over q(z|x)", default=1)
 parser.add_argument("-iw_samples", type=int,
-        help="iw_samples", default=1)
+        help="number of importance weighted samples", default=1)
 parser.add_argument("-lr", type=float,
         help="learning rate", default=0.001)
 parser.add_argument("-anneal_lr_factor", type=float,
-        help="learning rate annealing factor", default=0.999)
+        help="learning rate annealing factor", default=0.9995)
 parser.add_argument("-anneal_lr_epoch", type=float,
         help="larning rate annealing start epoch", default=1000)
 parser.add_argument("-batch_norm", type=str,
         help="batch normalization", default='true')
 parser.add_argument("-outfolder", type=str,
-        help="outfolder", default="outfolder")
+        help="output folder", default=os.path.join("results", os.path.splitext(filename_script)[0]))
 parser.add_argument("-nonlin_enc", type=str,
-        help="nonlin encoder", default="rectify")
+        help="encoder non-linearity", default="rectify")
 parser.add_argument("-nonlin_dec", type=str,
-        help="nonlin decoder", default="rectify")
+        help="decoder non-linearity", default="rectify")
 parser.add_argument("-nhidden", type=int,
-        help="number of hidden units in determistic layers", default=100)
+        help="number of hidden units in deterministic layers", default=500)
 parser.add_argument("-nlatent", type=int,
-        help="number of stochastic latent units", default=50)
+        help="number of stochastic latent units", default=100)
 parser.add_argument("-nflows", type=int,
         help="length of normalizing flow", default=5)
 parser.add_argument("-batch_size", type=int,
-        help="batch size", default=250)
+        help="batch size", default=100)
+parser.add_argument("-nepochs", type=int,
+        help="number of epochs to train", default=10000)
 parser.add_argument("-eval_epoch", type=int,
         help="epochs between evaluation of test performance", default=10)
 
@@ -58,10 +62,10 @@ def get_nonlin(nonlin):
     elif nonlin == 'tanh':
         return lasagne.nonlinearities.tanh
     else:
-        raise ValueError()
+        raise ValueError('invalid non-linearity \'' + nonlin + '\'')
 
 iw_samples = args.iw_samples   #number of importance weighted samples
-eq_samples = args.eq_samples   #number of MC samples over the expectation over E_q(z|x)
+eq_samples = args.eq_samples   #number of samples for the expectation over E_q(z|x)
 lr = args.lr
 anneal_lr_factor = args.anneal_lr_factor
 anneal_lr_epoch = args.anneal_lr_epoch
@@ -71,14 +75,13 @@ nonlin_enc = get_nonlin(args.nonlin_enc)
 nonlin_dec = get_nonlin(args.nonlin_dec)
 nhidden = args.nhidden
 latent_size = args.nlatent
-batch_size = args.batch_size
 dataset = args.dataset
 nflows = args.nflows
-num_epochs = 10000
-batch_size_test = 50
+batch_size = args.batch_size
+num_epochs = args.nepochs
 eval_epoch = args.eval_epoch
 
-assert dataset in ['sample','binarized'], "dataset must be sample|binarized"
+assert dataset in ['sample','fixed'], "dataset must be sample|fixed"
 
 np.random.seed(1234) # reproducibility
 
@@ -96,11 +99,9 @@ for name, val in sorted_args:
     description.append("# " + name + ":\t" + str(val))
 description.append('######################################################')
 
-scriptpath = os.path.realpath(__file__)
-filename = os.path.basename(scriptpath)
-shutil.copy(scriptpath,res_out + '/' + filename)
-logfile = res_out + '/logfile.log'
-model_out = res_out + '/model'
+shutil.copy(os.path.realpath(__file__), os.path.join(res_out, filename_script))
+logfile = os.path.join(res_out, 'logfile.log')
+model_out = os.path.join(res_out, 'model')
 with open(logfile,'w') as f:
     for l in description:
         f.write(l + '\n')
@@ -128,6 +129,20 @@ else:
     preprocesses_dataset = lambda dataset: dataset #just a dummy function
 
 
+train_x = np.concatenate([train_x,valid_x])
+
+train_x = train_x.astype(theano.config.floatX)
+test_x = test_x.astype(theano.config.floatX)
+
+num_features=train_x.shape[-1]
+
+sh_x_train = theano.shared(preprocesses_dataset(train_x), borrow=True)
+sh_x_test = theano.shared(preprocesses_dataset(test_x), borrow=True)
+
+#dummy test data for testing the implementation (printing output shapes of intermediate layers)
+X = np.ones((batch_size, 784), dtype=theano.config.floatX)
+
+
 def batchnormlayer(l,num_units, nonlinearity, name, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0.)):
     l = lasagne.layers.DenseLayer(l, num_units=num_units, name="Dense-" + name, W=W, b=b, nonlinearity=None)
     l = NormalizeLayer(l,name="BN-" + name)
@@ -148,16 +163,6 @@ else:
     denselayer = normaldenselayer
 
 
-train_x = np.concatenate([train_x,valid_x])
-num_features=train_x.shape[-1]
-
-sh_x_train = theano.shared(np.asarray(preprocesses_dataset(train_x), dtype=theano.config.floatX), borrow=True)
-sh_x_test = theano.shared(np.asarray(preprocesses_dataset(test_x), dtype=theano.config.floatX), borrow=True)
-
-#dummy test data for testing the implementation
-X = np.ones((batch_size,784),dtype='float32')
-
-
 ### MODEL SETUP
 # Recognition model q(z|x)
 l_in = lasagne.layers.InputLayer((None, num_features))
@@ -175,7 +180,7 @@ l_zk = l_z
 for i in range(nflows):
     l_nf = NormalizingPlanarFlowLayer(l_zk)
     l_zk = ListIndexLayer(l_nf,index=0)
-    l_psi_u += [ ListIndexLayer(l_nf,index=1)] #we need this for the cost function jf
+    l_psi_u += [ListIndexLayer(l_nf,index=1)] #we need this for the cost function
 
 # Generative model q(x|z)
 l_dec_h1 = denselayer(l_zk, num_units=nhidden, name='DEC_DENSE2', nonlinearity=nonlin_dec)
@@ -210,31 +215,29 @@ def latent_gaussian_x_bernoulli(z, z_mu, psi_u_list, z_log_var, x_mu, x, eq_samp
 
     When the output is bernoulli then the output from the decoder
     should be sigmoid. The sizes of the inputs are
-    z: (batch_size*Eq_samples*ivae_samples*nsamples, num_latent)
+    z: (batch_size*eq_samples*iw_samples, num_latent)
     z_mu: (batch_size, num_latent)
     z_log_var: (batch_size, num_latent)
-    x_mu: (batch_size*Eq_samples*ivae_samples*nsamples, num_latent)
+    x_mu: (batch_size*eq_samples*iw_samples, num_features)
     x: (batch_size, num_features)
 
-    Reference: Burda et. al. 2015 "Importance Weighted Autoencoders"
-
+    Reference: Burda et al. 2015 "Importance Weighted Autoencoders"
     """
 
     # reshape the variables so batch_size, eq_samples and iw_samples are separate dimensions
-    z = z.reshape((-1, eq_samples, iw_samples,  latent_size))
-    x_mu = x_mu.reshape((-1, eq_samples, iw_samples,  num_features))
+    z = z.reshape((-1, eq_samples, iw_samples, latent_size))
+    x_mu = x_mu.reshape((-1, eq_samples, iw_samples, num_features))
 
-    # dimshuffle x since we need to broadcast it when calculationg the binary
-    # cross-entropy
-    x = x.dimshuffle(0,'x','x',1) # x: (batch_size, eq_samples, iw_samples, num_latent)
+    # dimshuffle x, z_mu and z_log_var since we need to broadcast them when calculating the pdfs
+    x = x.dimshuffle(0,'x','x',1)                   # size: (batch_size, eq_samples, iw_samples, num_features)
+    z_mu = z_mu.dimshuffle(0,'x','x',1)             # size: (batch_size, eq_samples, iw_samples, num_latent)
+    z_log_var = z_log_var.dimshuffle(0,'x','x',1)   # size: (batch_size, eq_samples, iw_samples, num_latent)
 
     for i in range(len(psi_u_list)):
         psi_u_list[i] = psi_u_list[i].reshape((-1, eq_samples, iw_samples))
 
-
-    #calculate LL components, note that we sum over the feature/num_unit dimension
-    z_mu = z_mu.dimshuffle(0,'x','x',1) # mean: (batch_size, num_latent)
-    z_log_var = z_log_var.dimshuffle(0,'x','x',1) # logvar: (batch_size, num_latent)
+    # calculate LL components, note that the log_xyz() functions return log prob. for indepenedent components separately 
+    # so we sum over feature/latent dimensions for multivariate pdfs
     log_qz_given_x = log_normal2(z, z_mu, z_log_var).sum(axis=3)
     log_pz = log_stdnormal(z).sum(axis=3)
     log_px_given_z = log_bernoulli(x, T.clip(x_mu,epsilon,1-epsilon)).sum(axis=3)
@@ -249,17 +252,19 @@ def latent_gaussian_x_bernoulli(z, z_mu, psi_u_list, z_log_var, x_mu, x, eq_samp
     a = log_pz + log_px_given_z - log_qz_given_x + sum_log_psiu    # size: (batch_size, eq_samples, iw_samples)
     a_max = T.max(a, axis=2, keepdims=True)                        # size: (batch_size, eq_samples, 1)
 
-    # LL is calculated using Eq (8) in burda et al.
+    # LL is calculated using Eq (8) in Burda et al.
     # Working from inside out of the calculation below:
-    # T.exp(a-a_max): (bathc_size, Eq_samples, iw_samples)
+    # T.exp(a-a_max): (batch_size, eq_samples, iw_samples)
     # -> subtract a_max to avoid overflow. a_max is specific for  each set of
-    # importance samples and is broadcoasted over the last dimension.
+    # importance samples and is broadcasted over the last dimension.
     #
-    # T.log( T.mean(T.exp(a-a_max), axis=2): (batch_size, Eq_samples)
+    # T.log( T.mean(T.exp(a-a_max), axis=2) ): (batch_size, eq_samples)
     # -> This is the log of the sum over the importance weighted samples
     #
+    # The outer T.mean() computes the mean over eq_samples and batch_size
+    #
     # Lastly we add T.mean(a_max) to correct for the log-sum-exp trick
-    LL = T.mean(a_max) + T.mean( T.log( T.mean(T.exp(a-a_max), axis=2)))
+    LL = T.mean(a_max) + T.mean( T.log( T.mean(T.exp(a-a_max), axis=2) ) )
 
     return LL, T.mean(log_qz_given_x), T.mean(log_pz), T.mean(log_px_given_z)
 
@@ -280,7 +285,7 @@ print "OUTPUT SIZE OF l_z using BS=%i, sym_iw_samples=%i, sym_Eq_samples=%i --"\
 print "log_pz_train", log_pz_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples),sym_eq_samples:np.int32(eq_samples)}).shape
 print "log_px_given_z_train", log_px_given_z_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
 print "log_qz_given_x_train", log_qz_given_x_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
-print "lower_bound_train", LL_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)})
+print "lower_bound_train", LL_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
 
 # get all parameters
 params = lasagne.layers.get_all_params([l_dec_x_mu], trainable=True)
@@ -308,20 +313,19 @@ train_model = theano.function([sym_index, sym_batch_size, sym_lr, sym_eq_samples
 test_model = theano.function([sym_index, sym_batch_size, sym_eq_samples, sym_iw_samples], [LL_eval, log_qz_given_x_eval, log_pz_eval, log_px_given_z_eval],
                               givens={sym_x: sh_x_test[batch_slice]})
 
+
 if batch_norm:
     collect_out = lasagne.layers.get_output(l_dec_x_mu,sym_x, deterministic=True, collect=True)
     f_collect = theano.function([sym_eq_samples, sym_iw_samples],
                                 [collect_out],
                                 givens={sym_x: sh_x_train})
 
-n_train_batches = train_x.shape[0] / batch_size
-n_test_batches = test_x.shape[0] / batch_size_test
-
 # Training and Testing functions
-def train_epoch(lr,nsamples,ivae_samples):
+def train_epoch(lr, eq_samples, iw_samples, batch_size):
+    n_train_batches = train_x.shape[0] / batch_size
     costs, log_qz_given_x,log_pz,log_px_given_z, z_mu_train, z_log_var_train  = [],[],[],[],[],[]
     for i in range(n_train_batches):
-        cost_batch, log_qz_given_x_batch, log_pz_batch, log_px_given_z_batch, z_mu_batch, z_log_var_batch = train_model(i,batch_size,lr,nsamples,ivae_samples)
+        cost_batch, log_qz_given_x_batch, log_pz_batch, log_px_given_z_batch, z_mu_batch, z_log_var_batch = train_model(i, batch_size, lr, eq_samples, iw_samples)
         costs += [cost_batch]
         log_qz_given_x += [log_qz_given_x_batch]
         log_pz += [log_pz_batch]
@@ -330,12 +334,13 @@ def train_epoch(lr,nsamples,ivae_samples):
         z_log_var_train += [z_log_var_batch]
     return np.mean(costs), np.mean(log_qz_given_x), np.mean(log_pz), np.mean(log_px_given_z), np.concatenate(z_mu_train), np.concatenate(z_log_var_train)
 
-def test_epoch(nsamples,ivae_samples):
+def test_epoch(eq_samples, iw_samples, batch_size):
     if batch_norm:
         _ = f_collect(1,1) #collect BN stats on train
+    n_test_batches = test_x.shape[0] / batch_size
     costs, log_qz_given_x,log_pz,log_px_given_z, z_mu_train = [],[],[],[],[]
     for i in range(n_test_batches):
-        cost_batch, log_qz_given_x_batch, log_pz_batch, log_px_given_z_batch = test_model(i,batch_size_test,nsamples,ivae_samples)
+        cost_batch, log_qz_given_x_batch, log_pz_batch, log_px_given_z_batch = test_model(i, batch_size, eq_samples, iw_samples)
         costs += [cost_batch]
         log_qz_given_x += [log_qz_given_x_batch]
         log_pz += [log_pz_batch]
@@ -352,13 +357,13 @@ LL_test1, log_qz_given_x_test1, log_pz_test1, log_px_given_z_test1 = [],[],[],[]
 LL_test5000, log_qz_given_x_test5000, log_pz_test5000, log_px_given_z_test5000 = [],[],[],[]
 xepochs = []
 logvar_z_mu_train, logvar_z_var_train, meanvar_z_var_train = None,None,None
-for epoch in range(1,num_epochs):
+for epoch in range(1, 1+num_epochs):
     start = time.time()
 
     #shuffle train data and train model
     np.random.shuffle(train_x)
     sh_x_train.set_value(preprocesses_dataset(train_x))
-    train_out = train_epoch(lr,eq_samples, iw_samples)
+    train_out = train_epoch(lr, eq_samples, iw_samples, batch_size)
 
     if np.isnan(train_out[0]):
         ValueError("NAN in train LL!")
@@ -377,13 +382,13 @@ for epoch in range(1,num_epochs):
         z_log_var_train = train_out[5]
 
         print "calculating LL eq=1, iw=5000"
-        test_out5000 = test_epoch(1, 5000)
+        test_out5000 = test_epoch(1, 5000, batch_size=5) # smaller batch size to reduce memory requirements
         LL_test5000 += [test_out5000[0]]
         log_qz_given_x_test5000 += [test_out5000[1]]
         log_pz_test5000 += [test_out5000[2]]
         log_px_given_z_test5000 += [test_out5000[3]]
         print "calculating LL eq=1, iw=1"
-        test_out1 = test_epoch(1, 1)
+        test_out1 = test_epoch(1, 1, batch_size=50)
         LL_test1 += [test_out1[0]]
         log_qz_given_x_test1 += [test_out1[1]]
         log_pz_test1 += [test_out1[2]]
@@ -391,7 +396,7 @@ for epoch in range(1,num_epochs):
 
         xepochs += [epoch]
 
-        line = "*Epoch=%i\tTime=%0.2f\tLR=%0.5f\tE_qsamples=%i\tIVAEsamples=%i\t" %(epoch, t, lr, eq_samples, iw_samples) + \
+        line = "*Epoch=%i\tTime=%0.2f\tLR=%0.5f\teq_samples=%i\tiw_samples=%i\t" %(epoch, t, lr, eq_samples, iw_samples) + \
             "TRAIN:\tCost=%0.5f\tlogq(z|x)=%0.5f\tlogp(z)=%0.5f\tlogp(x|z)=%0.5f\t" %(costs_train[-1], log_qz_given_x_train[-1], log_pz_train[-1], log_px_given_z_train[-1]) + \
             "EVAL-L1:\tCost=%0.5f\tlogq(z|x)=%0.5f\tlogp(z)=%0.5f\tlogp(x|z)=%0.5f\t" %(LL_test1[-1], log_qz_given_x_test1[-1], log_pz_test1[-1], log_px_given_z_test1[-1]) + \
             "EVAL-L5000:\tCost=%0.5f\tlogq(z|x)=%0.5f\tlogp(z)=%0.5f\tlogp(x|z)=%0.5f\t" %(LL_test5000[-1], log_qz_given_x_test5000[-1], log_pz_test5000[-1], log_px_given_z_test5000[-1])
@@ -406,7 +411,7 @@ for epoch in range(1,num_epochs):
             cPickle.dump(all_params, f, protocol=cPickle.HIGHEST_PROTOCOL)
             f.close()
 
-        # BELOW THIS LINE IS A LOT OF BOOKING AND PLOTTING OF RESULTS
+        # BELOW THIS LINE IS A LOT OF BOOK KEEPING AND PLOTTING OF RESULTS
         _logvar_z_mu_train = np.log(np.var(z_mu_train,axis=0))
         _logvar_z_var_train = np.log(np.var(np.exp(z_log_var_train),axis=0))
         _meanvar_z_var_train = np.log(np.mean(np.exp(z_log_var_train),axis=0))
