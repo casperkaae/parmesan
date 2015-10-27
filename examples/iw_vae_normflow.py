@@ -114,16 +114,16 @@ def bernoullisample(x):
 
 
 ### LOAD DATA AND SET UP SHARED VARIABLES
-### LOAD DATA AND SET UP SHARED VARIABLES
 if dataset is 'sample':
     print "Using real valued MNIST dataset to binomial sample dataset after every epoch "
     train_x, train_t, valid_x, valid_t, test_x, test_t = load_mnist_realval()
     del train_t, valid_t, test_t
-    preprocesses_dataset = lambda dataset: dataset #just a dummy function
+    preprocesses_dataset = lambda bernoullisample: bernoullisample #just a dummy function
 else:
     print "Using fixed binarized MNIST data"
     train_x, valid_x, test_x = load_mnist_binarized()
-    preprocesses_dataset = bernoullisample
+    preprocesses_dataset = lambda dataset: dataset #just a dummy function
+
 
 train_x = np.concatenate([train_x,valid_x])
 num_features=train_x.shape[-1]
