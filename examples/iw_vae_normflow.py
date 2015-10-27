@@ -155,7 +155,7 @@ for i in range(nflows):
     l_psi_u += [ ListIndexLayer(l_nf,index=1)] #we need this for the cost function jf
 
 # Generative model q(x|z)
-l_dec_h1 = lasagne.layers.DenseLayer(l_z, num_units=nhidden, name='DEC_DENSE2', nonlinearity=nonlin_dec)
+l_dec_h1 = lasagne.layers.DenseLayer(l_zk, num_units=nhidden, name='DEC_DENSE2', nonlinearity=nonlin_dec)
 l_dec_h1 = lasagne.layers.DenseLayer(l_dec_h1, num_units=nhidden, name='DEC_DENSE1', nonlinearity=nonlin_dec)
 l_dec_x_mu = lasagne.layers.DenseLayer(l_dec_h1, num_units=num_features, nonlinearity=lasagne.nonlinearities.sigmoid, name='X_MU')
 
