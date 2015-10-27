@@ -10,7 +10,7 @@ import theano.tensor as T
 import numpy as np
 import lasagne
 from parmesan.distributions import log_stdnormal, log_normal2, log_bernoulli
-from parmesan.layers import SampleLayer, NormalizingPlanarFlowLayer, ListIndexLayer
+from parmesan.layers import SampleLayer, NormalizingPlanarFlowLayer, ListIndexLayer, NormalizeLayer, ScaleAndShiftLayer
 from parmesan.datasets import load_mnist_realval, load_mnist_binarized
 import matplotlib.pyplot as plt
 import shutil, gzip, os, cPickle, time, math, operator, argparse
@@ -28,6 +28,8 @@ parser.add_argument("-anneal_lr_factor", type=float,
         help="learning rate annealing factor", default=0.999)
 parser.add_argument("-anneal_lr_epoch", type=float,
         help="larning rate annealing start epoch", default=1000)
+parser.add_argument("-batch_norm", type=str,
+        help="batch normalization", default='true')
 parser.add_argument("-outfolder", type=str,
         help="outfolder", default="outfolder")
 parser.add_argument("-nonlin_enc", type=str,
@@ -63,6 +65,7 @@ eq_samples = args.eq_samples   #number of MC samples over the expectation over E
 lr = args.lr
 anneal_lr_factor = args.anneal_lr_factor
 anneal_lr_epoch = args.anneal_lr_epoch
+batch_norm = args.batch_norm == 'true' or args.batch_norm == 'True'
 res_out = args.outfolder
 nonlin_enc = get_nonlin(args.nonlin_enc)
 nonlin_dec = get_nonlin(args.nonlin_dec)
@@ -125,6 +128,26 @@ else:
     preprocesses_dataset = lambda dataset: dataset #just a dummy function
 
 
+def batchnormlayer(l,num_units, nonlinearity, name, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0.)):
+    l = lasagne.layers.DenseLayer(l, num_units=num_units, name="Dense-" + name, W=W, b=b, nonlinearity=None)
+    l = NormalizeLayer(l,name="BN-" + name)
+    l = ScaleAndShiftLayer(l,name="SaS-" + name)
+    l = lasagne.layers.NonlinearityLayer(l,nonlinearity=nonlinearity,name="Nonlin-" + name)
+    return l
+
+def normaldenselayer(l,num_units, nonlinearity, name, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0.)):
+    l = lasagne.layers.DenseLayer(l, num_units=num_units, name="Dense-" + name, W=W, b=b, nonlinearity=nonlinearity)
+    return l
+
+if batch_norm:
+    print "Using batch Normalization - The current implementation calculates " \
+          "the BN constants on the complete dataset in one batch. This might " \
+          "cause memory problems on some GFX's"
+    denselayer = batchnormlayer
+else:
+    denselayer = normaldenselayer
+
+
 train_x = np.concatenate([train_x,valid_x])
 num_features=train_x.shape[-1]
 
@@ -138,8 +161,8 @@ X = np.ones((batch_size,784),dtype='float32')
 ### MODEL SETUP
 # Recognition model q(z|x)
 l_in = lasagne.layers.InputLayer((None, num_features))
-l_enc_h1 = lasagne.layers.DenseLayer(l_in, num_units=nhidden, name='ENC_DENSE1', nonlinearity=nonlin_enc)
-l_enc_h1 = lasagne.layers.DenseLayer(l_enc_h1, num_units=nhidden, name='ENC_DENSE2', nonlinearity=nonlin_enc)
+l_enc_h1 = denselayer(l_in, num_units=nhidden, name='ENC_DENSE1', nonlinearity=nonlin_enc)
+l_enc_h1 = denselayer(l_enc_h1, num_units=nhidden, name='ENC_DENSE2', nonlinearity=nonlin_enc)
 l_mu = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_MU')
 l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_LOG_VAR')
 
@@ -155,8 +178,8 @@ for i in range(nflows):
     l_psi_u += [ ListIndexLayer(l_nf,index=1)] #we need this for the cost function jf
 
 # Generative model q(x|z)
-l_dec_h1 = lasagne.layers.DenseLayer(l_zk, num_units=nhidden, name='DEC_DENSE2', nonlinearity=nonlin_dec)
-l_dec_h1 = lasagne.layers.DenseLayer(l_dec_h1, num_units=nhidden, name='DEC_DENSE1', nonlinearity=nonlin_dec)
+l_dec_h1 = denselayer(l_zk, num_units=nhidden, name='DEC_DENSE2', nonlinearity=nonlin_dec)
+l_dec_h1 = denselayer(l_dec_h1, num_units=nhidden, name='DEC_DENSE1', nonlinearity=nonlin_dec)
 l_dec_x_mu = lasagne.layers.DenseLayer(l_dec_h1, num_units=num_features, nonlinearity=lasagne.nonlinearities.sigmoid, name='X_MU')
 
 # get output needed for evaluating of training i.e with noise if any
@@ -285,6 +308,12 @@ train_model = theano.function([sym_index, sym_batch_size, sym_lr, sym_eq_samples
 test_model = theano.function([sym_index, sym_batch_size, sym_eq_samples, sym_iw_samples], [LL_eval, log_qz_given_x_eval, log_pz_eval, log_px_given_z_eval],
                               givens={sym_x: sh_x_test[batch_slice]})
 
+if batch_norm:
+    collect_out = lasagne.layers.get_output(l_dec_x_mu,sym_x, deterministic=True, collect=True)
+    f_collect = theano.function([sym_eq_samples, sym_iw_samples],
+                                [collect_out],
+                                givens={sym_x: sh_x_train})
+
 n_train_batches = train_x.shape[0] / batch_size
 n_test_batches = test_x.shape[0] / batch_size_test
 
@@ -302,6 +331,8 @@ def train_epoch(lr,nsamples,ivae_samples):
     return np.mean(costs), np.mean(log_qz_given_x), np.mean(log_pz), np.mean(log_px_given_z), np.concatenate(z_mu_train), np.concatenate(z_log_var_train)
 
 def test_epoch(nsamples,ivae_samples):
+    if batch_norm:
+        _ = f_collect(1,1) #collect BN stats on train
     costs, log_qz_given_x,log_pz,log_px_given_z, z_mu_train = [],[],[],[],[]
     for i in range(n_test_batches):
         cost_batch, log_qz_given_x_batch, log_pz_batch, log_px_given_z_batch = test_model(i,batch_size_test,nsamples,ivae_samples)

@@ -109,9 +109,8 @@ if args.init == 'None':  # default to antti rasmus init
 else:
     initval = float(args.initval)
     inits = {'he': lasagne.init.HeUniform(initval),
-             'glorot': lasagne.init.HeUniform(initval),
-             'uniform': lasagne.init.HeUniform(initval),
-             'normal': lasagne.init.HeUniform(initval)}
+             'glorot': lasagne.init.GlorotUniform(initval),
+             'normal': lasagne.init.Normal(initval)}
     init = inits[args.init]
 
 

@@ -145,7 +145,9 @@ def normaldenselayer(l,num_units, nonlinearity, name, W=lasagne.init.GlorotUnifo
     return l
 
 if batch_norm:
-    print "Using batch Normalization"
+    print "Using batch Normalization - The current implementation calculates " \
+          "the BN constants on the complete dataset in one batch. This might " \
+          "cause memory problems on some GFX's"
     denselayer = batchnormlayer
 else:
     denselayer = normaldenselayer
