@@ -12,11 +12,13 @@ import time, shutil, os
 
 
 #settings
-batch_size = 128
-nhidden = 500
+batch_size = 100
+nhidden = 200
+nonlin_enc = T.nnet.softplus
+nonlin_dec = T.nnet.softplus
 latent_size = 100
-analytic_kl_term = False
-lr = 0.001
+analytic_kl_term = True
+lr = 0.0003
 num_epochs = 1000
 results_out = 'results/vae_vanilla/'
 
@@ -57,8 +59,8 @@ sh_x_test = theano.shared(np.asarray(bernoullisample(test_x), dtype=theano.confi
 
 ### RECOGNITION MODEL q(z|x)
 l_in = lasagne.layers.InputLayer((batch_size, nfeatures))
-l_enc_h1 = lasagne.layers.DenseLayer(l_in, num_units=nhidden, nonlinearity=lasagne.nonlinearities.rectify, name='ENC_DENSE1')
-l_enc_h1 = lasagne.layers.DenseLayer(l_enc_h1, num_units=nhidden, nonlinearity=lasagne.nonlinearities.rectify, name='ENC_DENSE2')
+l_enc_h1 = lasagne.layers.DenseLayer(l_in, num_units=nhidden, nonlinearity=nonlin_enc, name='ENC_DENSE1')
+l_enc_h1 = lasagne.layers.DenseLayer(l_enc_h1, num_units=nhidden, nonlinearity=nonlin_enc, name='ENC_DENSE2')
 
 l_mu = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_Z_MU')
 l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_Z_LOG_VAR')
@@ -67,8 +69,8 @@ l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinear
 l_z = SimpleSampleLayer(mu=l_mu, log_var=l_log_var)
 
 ### GENERATIVE MODEL p(x|z)
-l_dec_h1 = lasagne.layers.DenseLayer(l_z, num_units=nhidden, nonlinearity=lasagne.nonlinearities.rectify, name='DEC_DENSE2')
-l_dec_h1 = lasagne.layers.DenseLayer(l_dec_h1, num_units=nhidden, nonlinearity=lasagne.nonlinearities.rectify, name='DEC_DENSE1')
+l_dec_h1 = lasagne.layers.DenseLayer(l_z, num_units=nhidden, nonlinearity=nonlin_dec, name='DEC_DENSE2')
+l_dec_h1 = lasagne.layers.DenseLayer(l_dec_h1, num_units=nhidden, nonlinearity=nonlin_dec, name='DEC_DENSE1')
 l_dec_x_mu = lasagne.layers.DenseLayer(l_dec_h1, num_units=nfeatures, nonlinearity=lasagne.nonlinearities.sigmoid, name='DEC_X_MU')
 
 
