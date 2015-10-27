@@ -17,13 +17,17 @@ import shutil, gzip, os, cPickle, time, math, operator, argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-dataset", type=str,
-        help="real or binarized MNIST, real|binarized", default="real")
+        help="real or binarized MNIST, sample|binarized", default="sample")
 parser.add_argument("-eq_samples", type=int,
         help="samples over Eq", default=1)
 parser.add_argument("-iw_samples", type=int,
         help="iw_samples", default=1)
 parser.add_argument("-lr", type=float,
-        help="lr", default=0.001)
+        help="learning rate", default=0.001)
+parser.add_argument("-anneal_lr_factor", type=float,
+        help="learning rate annealing factor", default=0.999)
+parser.add_argument("-anneal_lr_epoch", type=float,
+        help="larning rate annealing start epoch", default=1000)
 parser.add_argument("-outfolder", type=str,
         help="outfolder", default="outfolder")
 parser.add_argument("-nonlin_enc", type=str,
@@ -57,6 +61,8 @@ def get_nonlin(nonlin):
 iw_samples = args.iw_samples   #number of importance weighted samples
 eq_samples = args.eq_samples   #number of MC samples over the expectation over E_q(z|x)
 lr = args.lr
+anneal_lr_factor = args.anneal_lr_factor
+anneal_lr_epoch = args.anneal_lr_epoch
 res_out = args.outfolder
 nonlin_enc = get_nonlin(args.nonlin_enc)
 nonlin_dec = get_nonlin(args.nonlin_dec)
@@ -69,7 +75,7 @@ num_epochs = 10000
 batch_size_test = 50
 eval_epoch = args.eval_epoch
 
-assert dataset in ['real','binarized'], "dataset must be real|binarized"
+assert dataset in ['sample','binarized'], "dataset must be sample|binarized"
 
 np.random.seed(1234) # reproducibility
 
@@ -109,7 +115,7 @@ def bernoullisample(x):
 
 ### LOAD DATA AND SET UP SHARED VARIABLES
 ### LOAD DATA AND SET UP SHARED VARIABLES
-if dataset is 'real':
+if dataset is 'sample':
     print "Using real valued MNIST dataset to binomial sample dataset after every epoch "
     train_x, train_t, valid_x, valid_t, test_x, test_t = load_mnist_realval()
     del train_t, valid_t, test_t
@@ -323,9 +329,12 @@ for epoch in range(1,num_epochs):
     sh_x_train.set_value(preprocesses_dataset(train_x))
     train_out = train_epoch(lr,eq_samples, iw_samples)
 
-
     if np.isnan(train_out[0]):
         ValueError("NAN in train LL!")
+
+    if epoch >= anneal_lr_epoch:
+        #annealing learning rate
+        lr = lr*anneal_lr_factor
 
     if epoch % eval_epoch == 0:
         t = time.time() - start
