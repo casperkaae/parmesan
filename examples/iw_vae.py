@@ -8,7 +8,7 @@ import theano.tensor as T
 import numpy as np
 import lasagne
 from parmesan.distributions import log_stdnormal, log_normal2, log_bernoulli
-from parmesan.layers import SampleLayer
+from parmesan.layers import SampleLayer, NormalizeLayer, ScaleAndShiftLayer
 from parmesan.datasets import load_mnist_realval, load_mnist_binarized
 import matplotlib.pyplot as plt
 import shutil, gzip, os, cPickle, time, math, operator, argparse
@@ -26,6 +26,10 @@ parser.add_argument("-anneal_lr_factor", type=float,
         help="learning rate annealing factor", default=0.999)
 parser.add_argument("-anneal_lr_epoch", type=float,
         help="larning rate annealing start epoch", default=1000)
+parser.add_argument("-batch_norm", type=str,
+        help="batch normalization", default='true')
+
+
 parser.add_argument("-outfolder", type=str,
         help="outfolder", default="outfolder")
 parser.add_argument("-nonlin_enc", type=str,
@@ -59,6 +63,7 @@ eq_samples = args.eq_samples   #number of MC samples over the expectation over E
 lr = args.lr
 anneal_lr_factor = args.anneal_lr_factor
 anneal_lr_epoch = args.anneal_lr_epoch
+batch_norm = args.batch_norm == 'true' or args.batch_norm == 'True'
 res_out = args.outfolder
 nonlin_enc = get_nonlin(args.nonlin_enc)
 nonlin_dec = get_nonlin(args.nonlin_dec)
@@ -120,7 +125,6 @@ else:
     preprocesses_dataset = lambda dataset: dataset #just a dummy function
 
 
-
 train_x = np.concatenate([train_x,valid_x])
 num_features=train_x.shape[-1]
 
@@ -131,11 +135,28 @@ sh_x_test = theano.shared(np.asarray(preprocesses_dataset(test_x), dtype=theano.
 X = np.ones((batch_size,784),dtype='float32')
 
 
+def batchnormlayer(l,num_units, nonlinearity, name, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0.)):
+    l = lasagne.layers.DenseLayer(l, num_units=num_units, name="Dense-" + name, W=W, b=b, nonlinearity=None)
+    l = NormalizeLayer(l,name="BN-" + name)
+    l = ScaleAndShiftLayer(l,name="SaS-" + name)
+    l = lasagne.layers.NonlinearityLayer(l,nonlinearity=nonlinearity,name="Nonlin-" + name)
+    return l
+
+def normaldenselayer(l,num_units, nonlinearity, name, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0.)):
+    l = lasagne.layers.DenseLayer(l, num_units=num_units, name="Dense-" + name, W=W, b=b, nonlinearity=nonlinearity)
+    return l
+
+if batch_norm:
+    denselayer = batchnormlayer
+else:
+    denselayer = normaldenselayer
+
+
 ### MODEL SETUP
 # Recognition model q(z|x)
 l_in = lasagne.layers.InputLayer((None, num_features))
-l_enc_h1 = lasagne.layers.DenseLayer(l_in, num_units=nhidden, name='ENC_DENSE1', nonlinearity=nonlin_enc)
-l_enc_h1 = lasagne.layers.DenseLayer(l_enc_h1, num_units=nhidden, name='ENC_DENSE2', nonlinearity=nonlin_enc)
+l_enc_h1 = lasagne.layers.denselayer(l_in, num_units=nhidden, name='ENC_DENSE1', nonlinearity=nonlin_enc)
+l_enc_h1 = lasagne.layers.denselayer(l_enc_h1, num_units=nhidden, name='ENC_DENSE2', nonlinearity=nonlin_enc)
 l_mu = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_MU')
 l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_LOG_VAR')
 
@@ -143,8 +164,8 @@ l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinear
 l_z = SampleLayer(mu=l_mu, log_var=l_log_var, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
 
 # Generative model q(x|z)
-l_dec_h1 = lasagne.layers.DenseLayer(l_z, num_units=nhidden, name='DEC_DENSE2', nonlinearity=nonlin_dec)
-l_dec_h1 = lasagne.layers.DenseLayer(l_dec_h1, num_units=nhidden, name='DEC_DENSE1', nonlinearity=nonlin_dec)
+l_dec_h1 = lasagne.layers.denselayer(l_z, num_units=nhidden, name='DEC_DENSE2', nonlinearity=nonlin_dec)
+l_dec_h1 = lasagne.layers.denselayer(l_dec_h1, num_units=nhidden, name='DEC_DENSE1', nonlinearity=nonlin_dec)
 l_dec_x_mu = lasagne.layers.DenseLayer(l_dec_h1, num_units=num_features, nonlinearity=lasagne.nonlinearities.sigmoid, name='X_MU')
 
 # get output needed for evaluating of training i.e with noise if any
