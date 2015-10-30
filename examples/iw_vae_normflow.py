@@ -128,7 +128,6 @@ else:
     train_x, valid_x, test_x = load_mnist_binarized()
     preprocesses_dataset = lambda dataset: dataset #just a dummy function
 
-
 train_x = np.concatenate([train_x,valid_x])
 
 train_x = train_x.astype(theano.config.floatX)
@@ -138,9 +137,6 @@ num_features=train_x.shape[-1]
 
 sh_x_train = theano.shared(preprocesses_dataset(train_x), borrow=True)
 sh_x_test = theano.shared(preprocesses_dataset(test_x), borrow=True)
-
-#dummy test data for testing the implementation (printing output shapes of intermediate layers)
-X = np.ones((batch_size, 784), dtype=theano.config.floatX)
 
 
 def batchnormlayer(l,num_units, nonlinearity, name, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0.)):
@@ -175,12 +171,12 @@ l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinear
 l_z = SampleLayer(mu=l_mu, log_var=l_log_var, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
 
 #Normalizing Flow
-l_psi_u = []
+l_logdet_J = []
 l_zk = l_z
 for i in range(nflows):
     l_nf = NormalizingPlanarFlowLayer(l_zk)
     l_zk = ListIndexLayer(l_nf,index=0)
-    l_psi_u += [ListIndexLayer(l_nf,index=1)] #we need this for the cost function
+    l_logdet_J += [ListIndexLayer(l_nf,index=1)] #we need this for the cost function
 
 # Generative model q(x|z)
 l_dec_h1 = denselayer(l_zk, num_units=nhidden, name='DEC_DENSE2', nonlinearity=nonlin_dec)
@@ -189,35 +185,39 @@ l_dec_x_mu = lasagne.layers.DenseLayer(l_dec_h1, num_units=num_features, nonline
 
 # get output needed for evaluating of training i.e with noise if any
 train_out = lasagne.layers.get_output(
-    [l_z, l_mu, l_log_var, l_dec_x_mu]+l_psi_u, sym_x, deterministic=False
+    [l_z, l_zk, l_mu, l_log_var, l_dec_x_mu]+l_logdet_J, sym_x, deterministic=False
 )
 z_train = train_out[0]
-z_mu_train = train_out[1]
-z_log_var_train = train_out[2]
-x_mu_train = train_out[3]
-psi_u_train = train_out[4:]
+zk_train = train_out[1]
+z_mu_train = train_out[2]
+z_log_var_train = train_out[3]
+x_mu_train = train_out[4]
+logdet_J_train = train_out[5:]
 
 # get output needed for evaluating of testing i.e without noise
 eval_out = lasagne.layers.get_output(
-    [l_z, l_mu, l_log_var, l_dec_x_mu]+l_psi_u, sym_x, deterministic=True
+    [l_z, l_zk, l_mu, l_log_var, l_dec_x_mu]+l_logdet_J, sym_x, deterministic=True
 )
 z_eval = eval_out[0]
-z_mu_eval = eval_out[1]
-z_log_var_eval = eval_out[2]
-x_mu_eval = eval_out[3]
-psi_u_eval = eval_out[4:]
+zk_eval = eval_out[1]
+z_mu_eval = eval_out[2]
+z_log_var_eval = eval_out[3]
+x_mu_eval = eval_out[4]
+logdet_J_eval = eval_out[5:]
 
 
-def latent_gaussian_x_bernoulli(z, z_mu, psi_u_list, z_log_var, x_mu, x, eq_samples, iw_samples, epsilon=1e-6):
+def latent_gaussian_x_bernoulli(z0, zk, z0_mu, z0_log_var, logdet_J_list, x_mu, x, eq_samples, iw_samples, epsilon=1e-6):
     """
     Latent z       : gaussian with standard normal prior
     decoder output : bernoulli
 
     When the output is bernoulli then the output from the decoder
     should be sigmoid. The sizes of the inputs are
-    z: (batch_size*eq_samples*iw_samples, num_latent)
-    z_mu: (batch_size, num_latent)
-    z_log_var: (batch_size, num_latent)
+    z0: (batch_size*eq_samples*iw_samples, num_latent)
+	zk: (batch_size*eq_samples*iw_samples, num_latent)
+    z0_mu: (batch_size, num_latent)
+    z0_log_var: (batch_size, num_latent)
+    logdet_J_list: list of `nflows` elements, each with shape (batch_size*eq_samples*iw_samples)
     x_mu: (batch_size*eq_samples*iw_samples, num_features)
     x: (batch_size, num_features)
 
@@ -225,32 +225,33 @@ def latent_gaussian_x_bernoulli(z, z_mu, psi_u_list, z_log_var, x_mu, x, eq_samp
     """
 
     # reshape the variables so batch_size, eq_samples and iw_samples are separate dimensions
-    z = z.reshape((-1, eq_samples, iw_samples, latent_size))
+    z0 = z0.reshape((-1, eq_samples, iw_samples, latent_size))
+    zk = zk.reshape((-1, eq_samples, iw_samples, latent_size))
     x_mu = x_mu.reshape((-1, eq_samples, iw_samples, num_features))
 
-    # dimshuffle x, z_mu and z_log_var since we need to broadcast them when calculating the pdfs
-    x = x.dimshuffle(0,'x','x',1)                   # size: (batch_size, eq_samples, iw_samples, num_features)
-    z_mu = z_mu.dimshuffle(0,'x','x',1)             # size: (batch_size, eq_samples, iw_samples, num_latent)
-    z_log_var = z_log_var.dimshuffle(0,'x','x',1)   # size: (batch_size, eq_samples, iw_samples, num_latent)
+    for i in range(len(logdet_J_list)):
+        logdet_J_list[i] = logdet_J_list[i].reshape((-1, eq_samples, iw_samples))
 
-    for i in range(len(psi_u_list)):
-        psi_u_list[i] = psi_u_list[i].reshape((-1, eq_samples, iw_samples))
+    # dimshuffle x, z_mu and z_log_var since we need to broadcast them when calculating the pdfs
+    x = x.dimshuffle(0, 'x', 'x', 1)                    # size: (batch_size, eq_samples, iw_samples, num_features)
+    z0_mu = z0_mu.dimshuffle(0, 'x', 'x', 1)            # size: (batch_size, eq_samples, iw_samples, num_latent)
+    z0_log_var = z0_log_var.dimshuffle(0, 'x', 'x', 1)  # size: (batch_size, eq_samples, iw_samples, num_latent)
 
     # calculate LL components, note that the log_xyz() functions return log prob. for indepenedent components separately 
     # so we sum over feature/latent dimensions for multivariate pdfs
-    log_qz_given_x = log_normal2(z, z_mu, z_log_var).sum(axis=3)
-    log_pz = log_stdnormal(z).sum(axis=3)
-    log_px_given_z = log_bernoulli(x, T.clip(x_mu,epsilon,1-epsilon)).sum(axis=3)
+    log_q0z0_given_x = log_normal2(z0, z0_mu, z0_log_var).sum(axis=3)
+    log_pzk = log_stdnormal(zk).sum(axis=3)
+    log_px_given_zk = log_bernoulli(x, T.clip(x_mu, epsilon, 1 - epsilon)).sum(axis=3)
 
     #normalizing flow loss
-    sum_log_psiu = 0
-    for psi_u in psi_u_list:
-        sum_log_psiu +=  T.log(T.abs_(1+psi_u))
+    sum_logdet_J = 0
+    for logdet_J_k in logdet_J_list:
+        sum_logdet_J += logdet_J_k
 
     #all log_*** should have dimension (batch_size, eq_samples, iw_samples)
     # Calculate the LL using log-sum-exp to avoid underflow
-    a = log_pz + log_px_given_z - log_qz_given_x + sum_log_psiu    # size: (batch_size, eq_samples, iw_samples)
-    a_max = T.max(a, axis=2, keepdims=True)                        # size: (batch_size, eq_samples, 1)
+    a = log_pzk + log_px_given_zk - log_q0z0_given_x + sum_logdet_J # size: (batch_size, eq_samples, iw_samples)
+    a_max = T.max(a, axis=2, keepdims=True)                         # size: (batch_size, eq_samples, 1)
 
     # LL is calculated using Eq (8) in Burda et al.
     # Working from inside out of the calculation below:
@@ -266,26 +267,28 @@ def latent_gaussian_x_bernoulli(z, z_mu, psi_u_list, z_log_var, x_mu, x, eq_samp
     # Lastly we add T.mean(a_max) to correct for the log-sum-exp trick
     LL = T.mean(a_max) + T.mean( T.log( T.mean(T.exp(a-a_max), axis=2) ) )
 
-    return LL, T.mean(log_qz_given_x), T.mean(log_pz), T.mean(log_px_given_z)
+    return LL, T.mean(log_q0z0_given_x), T.mean(sum_logdet_J), T.mean(log_pzk), T.mean(log_px_given_zk)
 
 # LOWER BOUNDS
-LL_train, log_qz_given_x_train, log_pz_train, log_px_given_z_train = latent_gaussian_x_bernoulli(
-    z_train, z_mu_train, psi_u_train, z_log_var_train, x_mu_train, sym_x, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
+LL_train, log_qz_given_x_train, sum_logdet_J_train, log_pz_train, log_px_given_z_train = latent_gaussian_x_bernoulli(
+    z_train, zk_train, z_mu_train, z_log_var_train, logdet_J_train, x_mu_train, sym_x, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
 
-LL_eval, log_qz_given_x_eval, log_pz_eval, log_px_given_z_eval = latent_gaussian_x_bernoulli(
-    z_eval, z_mu_eval, psi_u_eval, z_log_var_eval, x_mu_eval, sym_x, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
+LL_eval, log_qz_given_x_eval, sum_logdet_J_eval, log_pz_eval, log_px_given_z_eval = latent_gaussian_x_bernoulli(
+    z_eval, zk_eval, z_mu_eval, z_log_var_eval, logdet_J_eval, x_mu_eval, sym_x, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
 
 #some sanity checks that we can forward data through the model
-print "OUTPUT SIZE OF l_z using BS=%i, sym_iw_samples=%i, sym_Eq_samples=%i --"\
-      %(batch_size, iw_samples,eq_samples), \
+X = np.ones((batch_size, 784), dtype=theano.config.floatX) # dummy data for testing the implementation
+
+print "OUTPUT SIZE OF l_z using BS=%d, latent_size=%d, sym_iw_samples=%d, sym_eq_samples=%d --"\
+      %(batch_size, latent_size, iw_samples, eq_samples), \
     lasagne.layers.get_output(l_z,sym_x).eval(
     {sym_x: X, sym_iw_samples: np.int32(iw_samples),
      sym_eq_samples: np.int32(eq_samples)}).shape
 
-print "log_pz_train", log_pz_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples),sym_eq_samples:np.int32(eq_samples)}).shape
-print "log_px_given_z_train", log_px_given_z_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
-print "log_qz_given_x_train", log_qz_given_x_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
-print "lower_bound_train", LL_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
+#print "log_pz_train", log_pz_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples),sym_eq_samples:np.int32(eq_samples)}).shape
+#print "log_px_given_z_train", log_px_given_z_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
+#print "log_qz_given_x_train", log_qz_given_x_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
+#print "lower_bound_train", LL_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
 
 # get all parameters
 params = lasagne.layers.get_all_params([l_dec_x_mu], trainable=True)
@@ -297,20 +300,20 @@ grads = T.grad(-LL_train, params)
 clip_grad = 1
 max_norm = 5
 mgrads = lasagne.updates.total_norm_constraint(grads,max_norm=max_norm)
-cgrads = [T.clip(g,-clip_grad, clip_grad) for g in mgrads]
+cgrads = [T.clip(g, -clip_grad, clip_grad) for g in mgrads]
 
-updates = lasagne.updates.adam(cgrads, params,beta1=0.9, beta2=0.999, epsilon=1e-4, learning_rate=sym_lr)
+updates = lasagne.updates.adam(cgrads, params, beta1=0.9, beta2=0.999, epsilon=1e-4, learning_rate=sym_lr)
 
 # Helper symbolic variables to index into the shared train and test data
 sym_index = T.iscalar('index')
 sym_batch_size = T.iscalar('batch_size')
 batch_slice = slice(sym_index * sym_batch_size, (sym_index + 1) * sym_batch_size)
 
-train_model = theano.function([sym_index, sym_batch_size, sym_lr, sym_eq_samples, sym_iw_samples], [LL_train, log_qz_given_x_train, log_pz_train, log_px_given_z_train, z_mu_train, z_log_var_train],
+train_model = theano.function([sym_index, sym_batch_size, sym_lr, sym_eq_samples, sym_iw_samples], [LL_train, log_qz_given_x_train, sum_logdet_J_train, log_pz_train, log_px_given_z_train, z_mu_train, z_log_var_train],
                               givens={sym_x: sh_x_train[batch_slice]},
                               updates=updates)
 
-test_model = theano.function([sym_index, sym_batch_size, sym_eq_samples, sym_iw_samples], [LL_eval, log_qz_given_x_eval, log_pz_eval, log_px_given_z_eval],
+test_model = theano.function([sym_index, sym_batch_size, sym_eq_samples, sym_iw_samples], [LL_eval, log_qz_given_x_eval, sum_logdet_J_eval, log_pz_eval, log_px_given_z_eval],
                               givens={sym_x: sh_x_test[batch_slice]})
 
 
@@ -323,38 +326,40 @@ if batch_norm:
 # Training and Testing functions
 def train_epoch(lr, eq_samples, iw_samples, batch_size):
     n_train_batches = train_x.shape[0] / batch_size
-    costs, log_qz_given_x,log_pz,log_px_given_z, z_mu_train, z_log_var_train  = [],[],[],[],[],[]
+    costs, log_qz_given_x, sum_logdet_J, log_pz, log_px_given_z, z_mu_train, z_log_var_train  = [],[],[],[],[],[],[]
     for i in range(n_train_batches):
-        cost_batch, log_qz_given_x_batch, log_pz_batch, log_px_given_z_batch, z_mu_batch, z_log_var_batch = train_model(i, batch_size, lr, eq_samples, iw_samples)
+        cost_batch, log_qz_given_x_batch, sum_logdet_J_batch, log_pz_batch, log_px_given_z_batch, z_mu_batch, z_log_var_batch = train_model(i, batch_size, lr, eq_samples, iw_samples)
         costs += [cost_batch]
         log_qz_given_x += [log_qz_given_x_batch]
+        sum_logdet_J += [sum_logdet_J_batch]
         log_pz += [log_pz_batch]
         log_px_given_z += [log_px_given_z_batch]
         z_mu_train += [z_mu_batch]
         z_log_var_train += [z_log_var_batch]
-    return np.mean(costs), np.mean(log_qz_given_x), np.mean(log_pz), np.mean(log_px_given_z), np.concatenate(z_mu_train), np.concatenate(z_log_var_train)
+    return np.mean(costs), np.mean(log_qz_given_x), np.mean(sum_logdet_J), np.mean(log_pz), np.mean(log_px_given_z), np.concatenate(z_mu_train), np.concatenate(z_log_var_train)
 
 def test_epoch(eq_samples, iw_samples, batch_size):
     if batch_norm:
         _ = f_collect(1,1) #collect BN stats on train
     n_test_batches = test_x.shape[0] / batch_size
-    costs, log_qz_given_x,log_pz,log_px_given_z, z_mu_train = [],[],[],[],[]
+    costs, log_qz_given_x, sum_logdet_J, log_pz, log_px_given_z = [],[],[],[],[]
     for i in range(n_test_batches):
-        cost_batch, log_qz_given_x_batch, log_pz_batch, log_px_given_z_batch = test_model(i, batch_size, eq_samples, iw_samples)
+        cost_batch, log_qz_given_x_batch, sum_logdet_J_batch, log_pz_batch, log_px_given_z_batch = test_model(i, batch_size, eq_samples, iw_samples)
         costs += [cost_batch]
         log_qz_given_x += [log_qz_given_x_batch]
+        sum_logdet_J += [sum_logdet_J_batch]
         log_pz += [log_pz_batch]
         log_px_given_z += [log_px_given_z_batch]
-    return np.mean(costs), np.mean(log_qz_given_x), np.mean(log_pz), np.mean(log_px_given_z)
+    return np.mean(costs), np.mean(log_qz_given_x), np.mean(sum_logdet_J), np.mean(log_pz), np.mean(log_px_given_z)
 
 print "Training"
 
 # TRAIN LOOP
 # We have made some the code very verbose to make it easier to understand.
 total_time_start = time.time()
-costs_train, log_qz_given_x_train, log_pz_train, log_px_given_z_train = [],[],[],[]
-LL_test1, log_qz_given_x_test1, log_pz_test1, log_px_given_z_test1 = [],[],[],[]
-LL_test5000, log_qz_given_x_test5000, log_pz_test5000, log_px_given_z_test5000 = [],[],[],[]
+costs_train, log_qz_given_x_train, sum_logdet_J_train, log_pz_train, log_px_given_z_train = [],[],[],[],[]
+LL_test1, log_qz_given_x_test1, sum_logdet_J_test1, log_pz_test1, log_px_given_z_test1 = [],[],[],[],[]
+LL_test5000, log_qz_given_x_test5000, sum_logdet_J_test5000, log_pz_test5000, log_px_given_z_test5000 = [],[],[],[],[]
 xepochs = []
 logvar_z_mu_train, logvar_z_var_train, meanvar_z_var_train = None,None,None
 for epoch in range(1, 1+num_epochs):
@@ -374,32 +379,37 @@ for epoch in range(1, 1+num_epochs):
 
     if epoch % eval_epoch == 0:
         t = time.time() - start
+
         costs_train += [train_out[0]]
         log_qz_given_x_train += [train_out[1]]
-        log_pz_train += [train_out[2]]
-        log_px_given_z_train += [train_out[3]]
-        z_mu_train = train_out[4]
-        z_log_var_train = train_out[5]
+        sum_logdet_J_train += [train_out[2]]
+        log_pz_train += [train_out[3]]
+        log_px_given_z_train += [train_out[4]]
+        z_mu_train = train_out[5]
+        z_log_var_train = train_out[6]
 
         print "calculating LL eq=1, iw=5000"
         test_out5000 = test_epoch(1, 5000, batch_size=5) # smaller batch size to reduce memory requirements
         LL_test5000 += [test_out5000[0]]
         log_qz_given_x_test5000 += [test_out5000[1]]
-        log_pz_test5000 += [test_out5000[2]]
-        log_px_given_z_test5000 += [test_out5000[3]]
+        sum_logdet_J_test5000 += [test_out5000[2]]
+        log_pz_test5000 += [test_out5000[3]]
+        log_px_given_z_test5000 += [test_out5000[4]]
+
         print "calculating LL eq=1, iw=1"
         test_out1 = test_epoch(1, 1, batch_size=50)
         LL_test1 += [test_out1[0]]
         log_qz_given_x_test1 += [test_out1[1]]
-        log_pz_test1 += [test_out1[2]]
-        log_px_given_z_test1 += [test_out1[3]]
+        sum_logdet_J_test1 += [test_out1[2]]
+        log_pz_test1 += [test_out1[3]]
+        log_px_given_z_test1 += [test_out1[4]]
 
         xepochs += [epoch]
 
-        line = "*Epoch=%i\tTime=%0.2f\tLR=%0.5f\teq_samples=%i\tiw_samples=%i\t" %(epoch, t, lr, eq_samples, iw_samples) + \
-            "TRAIN:\tCost=%0.5f\tlogq(z|x)=%0.5f\tlogp(z)=%0.5f\tlogp(x|z)=%0.5f\t" %(costs_train[-1], log_qz_given_x_train[-1], log_pz_train[-1], log_px_given_z_train[-1]) + \
-            "EVAL-L1:\tCost=%0.5f\tlogq(z|x)=%0.5f\tlogp(z)=%0.5f\tlogp(x|z)=%0.5f\t" %(LL_test1[-1], log_qz_given_x_test1[-1], log_pz_test1[-1], log_px_given_z_test1[-1]) + \
-            "EVAL-L5000:\tCost=%0.5f\tlogq(z|x)=%0.5f\tlogp(z)=%0.5f\tlogp(x|z)=%0.5f\t" %(LL_test5000[-1], log_qz_given_x_test5000[-1], log_pz_test5000[-1], log_px_given_z_test5000[-1])
+        line = "*Epoch=%d\tTime=%.2f\tLR=%.5f\teq_samples=%d\tiw_samples=%d\tnflows=%d\n" %(epoch, t, lr, eq_samples, iw_samples, nflows) + \
+               "  TRAIN:\tCost=%.5f\tlogqK(zK|x)=%.5f\t= [logq0(z0|x)=%.5f - sum logdet J=%.5f]\tlogp(zK)=%.5f\tlogp(x|zK)=%.5f\n" %(costs_train[-1], log_qz_given_x_train[-1] - sum_logdet_J_train[-1], log_qz_given_x_train[-1], sum_logdet_J_train[-1], log_pz_train[-1], log_px_given_z_train[-1]) + \
+               "  EVAL-L1:\tCost=%.5f\tlogqK(zK|x)=%.5f\t= [logq0(z0|x)=%.5f - sum logdet J=%.5f]\tlogp(zK)=%.5f\tlogp(x|zK)=%.5f\n" %(LL_test1[-1], log_qz_given_x_test1[-1] - sum_logdet_J_test1[-1], log_qz_given_x_test1[-1], sum_logdet_J_test1[-1], log_pz_test1[-1], log_px_given_z_test1[-1]) + \
+               "  EVAL-L5000:\tCost=%.5f\tlogqK(zK|x)=%.5f\t= [logq0(z0|x)=%.5f - sum logdet J=%.5f]\tlogp(zK)=%.5f\tlogp(x|zK)=%.5f" %(LL_test5000[-1], log_qz_given_x_test5000[-1] - sum_logdet_J_test5000[-1], log_qz_given_x_test5000[-1], sum_logdet_J_test5000[-1], log_pz_test5000[-1], log_px_given_z_test5000[-1])
         print line
         with open(logfile,'a') as f:
             f.write(line + "\n")
