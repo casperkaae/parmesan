@@ -123,7 +123,6 @@ else:
     train_x, valid_x, test_x = load_mnist_binarized()
     preprocesses_dataset = lambda dataset: dataset #just a dummy function
 
-
 train_x = np.concatenate([train_x,valid_x])
 
 train_x = train_x.astype(theano.config.floatX)
@@ -133,9 +132,6 @@ num_features=train_x.shape[-1]
 
 sh_x_train = theano.shared(preprocesses_dataset(train_x), borrow=True)
 sh_x_test = theano.shared(preprocesses_dataset(test_x), borrow=True)
-
-#dummy test data for testing the implementation (printing output shapes of intermediate layers)
-X = np.ones((batch_size, 784), dtype=theano.config.floatX)
 
 
 def batchnormlayer(l,num_units, nonlinearity, name, W=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(0.)):
@@ -207,15 +203,15 @@ def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, eq_samples, iw_samp
     x_mu = x_mu.reshape((-1, eq_samples, iw_samples, num_features))
 
     # dimshuffle x, z_mu and z_log_var since we need to broadcast them when calculating the pdfs
-    x = x.dimshuffle(0,'x','x',1)                   # size: (batch_size, eq_samples, iw_samples, num_features)
-    z_mu = z_mu.dimshuffle(0,'x','x',1)             # size: (batch_size, eq_samples, iw_samples, num_latent)
-    z_log_var = z_log_var.dimshuffle(0,'x','x',1)   # size: (batch_size, eq_samples, iw_samples, num_latent)
+    x = x.dimshuffle(0, 'x', 'x', 1)                    # size: (batch_size, eq_samples, iw_samples, num_features)
+    z_mu = z_mu.dimshuffle(0, 'x', 'x', 1)              # size: (batch_size, eq_samples, iw_samples, num_latent)
+    z_log_var = z_log_var.dimshuffle(0, 'x', 'x', 1)    # size: (batch_size, eq_samples, iw_samples, num_latent)
 
     # calculate LL components, note that the log_xyz() functions return log prob. for indepenedent components separately 
     # so we sum over feature/latent dimensions for multivariate pdfs
     log_qz_given_x = log_normal2(z, z_mu, z_log_var).sum(axis=3)
     log_pz = log_stdnormal(z).sum(axis=3)
-    log_px_given_z = log_bernoulli(x, T.clip(x_mu,epsilon,1-epsilon)).sum(axis=3)
+    log_px_given_z = log_bernoulli(x, T.clip(x_mu, epsilon, 1 - epsilon)).sum(axis=3)
 
     #all log_*** should have dimension (batch_size, eq_samples, iw_samples)
     # Calculate the LL using log-sum-exp to avoid underflow
@@ -246,16 +242,18 @@ LL_eval, log_qz_given_x_eval, log_pz_eval, log_px_given_z_eval = latent_gaussian
     z_eval, z_mu_eval, z_log_var_eval, x_mu_eval, sym_x, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
 
 #some sanity checks that we can forward data through the model
-print "OUTPUT SIZE OF l_z using BS=%i, sym_iw_samples=%i, sym_Eq_samples=%i --"\
-      %(batch_size, iw_samples,eq_samples), \
+X = np.ones((batch_size, 784), dtype=theano.config.floatX) # dummy data for testing the implementation
+
+print "OUTPUT SIZE OF l_z using BS=%d, latent_size=%d, sym_iw_samples=%d, sym_eq_samples=%d --"\
+      %(batch_size, latent_size, iw_samples, eq_samples), \
     lasagne.layers.get_output(l_z,sym_x).eval(
     {sym_x: X, sym_iw_samples: np.int32(iw_samples),
      sym_eq_samples: np.int32(eq_samples)}).shape
 
-print "log_pz_train", log_pz_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples),sym_eq_samples:np.int32(eq_samples)}).shape
-print "log_px_given_z_train", log_px_given_z_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
-print "log_qz_given_x_train", log_qz_given_x_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
-print "lower_bound_train", LL_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
+#print "log_pz_train", log_pz_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples),sym_eq_samples:np.int32(eq_samples)}).shape
+#print "log_px_given_z_train", log_px_given_z_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
+#print "log_qz_given_x_train", log_qz_given_x_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
+#print "lower_bound_train", LL_train.eval({sym_x:X, sym_iw_samples: np.int32(iw_samples), sym_eq_samples:np.int32(eq_samples)}).shape
 
 # get all parameters
 params = lasagne.layers.get_all_params([l_dec_x_mu], trainable=True)
@@ -267,9 +265,9 @@ grads = T.grad(-LL_train, params)
 clip_grad = 1
 max_norm = 5
 mgrads = lasagne.updates.total_norm_constraint(grads,max_norm=max_norm)
-cgrads = [T.clip(g,-clip_grad, clip_grad) for g in mgrads]
+cgrads = [T.clip(g, -clip_grad, clip_grad) for g in mgrads]
 
-updates = lasagne.updates.adam(cgrads, params,beta1=0.9, beta2=0.999, epsilon=1e-4, learning_rate=sym_lr)
+updates = lasagne.updates.adam(cgrads, params, beta1=0.9, beta2=0.999, epsilon=1e-4, learning_rate=sym_lr)
 
 # Helper symbolic variables to index into the shared train and test data
 sym_index = T.iscalar('index')
@@ -308,7 +306,7 @@ def test_epoch(eq_samples, iw_samples, batch_size):
     if batch_norm:
         _ = f_collect(1,1) #collect BN stats on train
     n_test_batches = test_x.shape[0] / batch_size
-    costs, log_qz_given_x,log_pz,log_px_given_z, z_mu_train = [],[],[],[],[]
+    costs, log_qz_given_x,log_pz,log_px_given_z = [],[],[],[]
     for i in range(n_test_batches):
         cost_batch, log_qz_given_x_batch, log_pz_batch, log_px_given_z_batch = test_model(i, batch_size, eq_samples, iw_samples)
         costs += [cost_batch]
@@ -344,6 +342,7 @@ for epoch in range(1, 1+num_epochs):
 
     if epoch % eval_epoch == 0:
         t = time.time() - start
+
         costs_train += [train_out[0]]
         log_qz_given_x_train += [train_out[1]]
         log_pz_train += [train_out[2]]
@@ -366,10 +365,10 @@ for epoch in range(1, 1+num_epochs):
 
         xepochs += [epoch]
 
-        line = "*Epoch=%i\tTime=%0.2f\tLR=%0.5f\teq_samples=%i\tiw_samples=%i\t" %(epoch, t, lr, eq_samples, iw_samples) + \
-            "TRAIN:\tCost=%0.5f\tlogq(z|x)=%0.5f\tlogp(z)=%0.5f\tlogp(x|z)=%0.5f\t" %(costs_train[-1], log_qz_given_x_train[-1], log_pz_train[-1], log_px_given_z_train[-1]) + \
-            "EVAL-L1:\tCost=%0.5f\tlogq(z|x)=%0.5f\tlogp(z)=%0.5f\tlogp(x|z)=%0.5f\t" %(LL_test1[-1], log_qz_given_x_test1[-1], log_pz_test1[-1], log_px_given_z_test1[-1]) + \
-            "EVAL-L5000:\tCost=%0.5f\tlogq(z|x)=%0.5f\tlogp(z)=%0.5f\tlogp(x|z)=%0.5f\t" %(LL_test5000[-1], log_qz_given_x_test5000[-1], log_pz_test5000[-1], log_px_given_z_test5000[-1])
+        line = "*Epoch=%d\tTime=%.2f\tLR=%.5f\teq_samples=%d\tiw_samples=%d\n" %(epoch, t, lr, eq_samples, iw_samples) + \
+               "  TRAIN:\tCost=%.5f\tlogq(z|x)=%.5f\tlogp(z)=%.5f\tlogp(x|z)=%.5f\n" %(costs_train[-1], log_qz_given_x_train[-1], log_pz_train[-1], log_px_given_z_train[-1]) + \
+               "  EVAL-L1:\tCost=%.5f\tlogq(z|x)=%.5f\tlogp(z)=%.5f\tlogp(x|z)=%.5f\n" %(LL_test1[-1], log_qz_given_x_test1[-1], log_pz_test1[-1], log_px_given_z_test1[-1]) + \
+               "  EVAL-L5000:\tCost=%.5f\tlogq(z|x)=%.5f\tlogp(z)=%.5f\tlogp(x|z)=%.5f" %(LL_test5000[-1], log_qz_given_x_test5000[-1], log_pz_test5000[-1], log_px_given_z_test5000[-1])
         print line
         with open(logfile,'a') as f:
             f.write(line + "\n")
