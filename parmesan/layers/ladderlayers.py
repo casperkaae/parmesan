@@ -35,8 +35,9 @@ class DenoiseLayer(MergeLayer):
 
         u_shp, z_shp = self.input_shapes
 
+
         if not u_shp[-1] == z_shp[-1]:
-            raise ValueError("last diemension of u and z must both same size"
+            raise ValueError("last dimension of u and z  must be equal"
                              " u was %s, z was %s" % (str(u_shp), str(z_shp)))
         self.num_inputs = z_shp[-1]
         self.nonlinearity = nonlinearity
