@@ -150,7 +150,7 @@ class ScaleAndShiftLayer(lasagne.layers.Layer):
         do the correct thing for dense layers and convolutional layers)
     """
 
-    def __init__(self, incoming, axes=None, **kwargs):
+    def __init__(self, incoming, axes=None, beta=lasagne.init.Constant(0), lasagne.init.Constant(1), **kwargs):
         super(ScaleAndShiftLayer, self).__init__(incoming, **kwargs)
         if axes is None:
             # default: normalize over all but the second axis
@@ -166,9 +166,9 @@ class ScaleAndShiftLayer(lasagne.layers.Layer):
         if any(size is None for size in shape):
             raise ValueError("BatchNormLayer needs specified input sizes for "
                              "all dimensions/axes not normalized over.")
-        self.beta = self.add_param(lasagne.init.Constant(0), shape, name='beta',
+        self.beta = self.add_param(beta, shape, name='beta',
                                    trainable=True, regularizable=True)
-        self.gamma = self.add_param(lasagne.init.Constant(1), shape, name='gamma',
+        self.gamma = self.add_param(gamma, shape, name='gamma',
                                     trainable=True, regularizable=False)
 
     def get_output_for(self, input, deterministic=False, **kwargs):
