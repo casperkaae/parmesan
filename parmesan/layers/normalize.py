@@ -150,7 +150,7 @@ class ScaleAndShiftLayer(lasagne.layers.Layer):
         do the correct thing for dense layers and convolutional layers)
     """
 
-    def __init__(self, incoming, axes=None, beta=lasagne.init.Constant(0), lasagne.init.Constant(1), **kwargs):
+    def __init__(self, incoming, axes=None, beta=lasagne.init.Constant(0), gamma=lasagne.init.Constant(1), **kwargs):
         super(ScaleAndShiftLayer, self).__init__(incoming, **kwargs)
         if axes is None:
             # default: normalize over all but the second axis
