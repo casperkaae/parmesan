@@ -5,7 +5,7 @@ import tarfile
 import fnmatch
 import os
 import urllib
-
+from scipy.io import loadmat
 
 def _unpickle(f):
     import cPickle
@@ -13,6 +13,21 @@ def _unpickle(f):
     d = cPickle.load(fo)
     fo.close()
     return d
+
+def _download_frey_faces(dataset):
+    """
+    Download the MNIST dataset if it is not present.
+    :return: The train, test and validation set.
+    """
+    origin = (
+        'http://www.cs.nyu.edu/~roweis/data/frey_rawface.mat'
+    )
+    print 'Downloading data from %s' % origin
+    urllib.urlretrieve(origin, dataset+'.mat')
+    matdata = loadmat(dataset)
+    f = gzip.open(dataset +'.pkl.gz', 'w')
+    pkl.dump([matdata['ff'].T],f)
+
 
 
 def _download_mnist_realval(dataset):
@@ -157,3 +172,23 @@ def cifar10(datasets_dir=_get_datafolder_path(), num_val=5000):
                 x_test, targets_test)
     else:
         return x_train, targets_train, x_test, targets_test
+
+
+
+def load_frey_faces(dataset=_get_datafolder_path()+'/frey_faces/frey_faces', normalize=True):
+    '''
+    Loads the frey faces dataset
+    :param dataset: path to dataset file
+    '''
+    if not os.path.isfile(dataset + '.pkl.gz'):
+        datasetfolder = os.path.dirname(dataset+'.pkl.gz')
+        if not os.path.exists(datasetfolder):
+            os.makedirs(datasetfolder)
+        _download_frey_faces(dataset)
+
+    f = gzip.open(dataset+'.pkl.gz', 'rb')
+    data = pkl.load(f)[0].astype('float32')
+    f.close()
+    if normalize:
+        data = (data - np.min(data)) / (np.max(data)-np.min(data))
+    return data
