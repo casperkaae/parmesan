@@ -296,10 +296,10 @@ def _download_svhn(dataset):
     train_x = train['X'].swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
     train_y = train['y'].reshape((-1)) - 1
     test = loadmat(dataset+'test_32x32.mat')
-    test_x = test['X'].swapaxes(0,1).swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
+    test_x = test['X'].swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
     test_y = test['y'].reshape((-1)) - 1
     extra = loadmat(dataset+'extra_32x32.mat')
-    extra_x = extra['X'].swapaxes(0,1).swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
+    extra_x = extra['X'].swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
     extra_y = extra['y'].reshape((-1)) - 1
     print "Saving train data"
     with open(dataset +'svhn_train.cpkl', 'w') as f:
