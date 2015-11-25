@@ -203,7 +203,7 @@ def load_frey_faces(dataset=_get_datafolder_path()+'/frey_faces/frey_faces', nor
         _download_frey_faces(dataset)
 
     f = gzip.open(dataset+'.pkl.gz', 'rb')
-    data = pkl.load(f)[0].astype('float32')
+    data = pkl.load(f)[0].reshape(-1,28,20).astype('float32')
     f.close()
     if dequantify:
         data = data + np.random.uniform(0,1,size=data.shape).astype('float32')
