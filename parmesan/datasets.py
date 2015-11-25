@@ -205,7 +205,7 @@ def load_frey_faces(dataset=_get_datafolder_path()+'/frey_faces/frey_faces', nor
     if not os.path.isfile(datasetfolder + '/fixed_split.pkl'):
         urllib.urlretrieve('https://raw.githubusercontent.com/casperkaae/'
                            'extra_parmesan/master/data_splits/'
-                           'frey_faces_fixed_split.pklt',
+                           'frey_faces_fixed_split.pkl',
                            datasetfolder + '/fixed_split.pkl')
 
     f = gzip.open(dataset+'.pkl.gz', 'rb')
