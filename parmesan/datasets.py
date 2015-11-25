@@ -196,11 +196,17 @@ def load_frey_faces(dataset=_get_datafolder_path()+'/frey_faces/frey_faces', nor
         Uria et. al 2013 "RNADE: The real-valued neural autoregressive density-estimator"
     :return:
     '''
+    datasetfolder = os.path.dirname(dataset+'.pkl.gz')
     if not os.path.isfile(dataset + '.pkl.gz'):
-        datasetfolder = os.path.dirname(dataset+'.pkl.gz')
         if not os.path.exists(datasetfolder):
             os.makedirs(datasetfolder)
         _download_frey_faces(dataset)
+
+    if not os.path.isfile(datasetfolder + '/fixed_split.pkl'):
+        urllib.urlretrieve('https://raw.githubusercontent.com/casperkaae/'
+                           'extra_parmesan/master/data_splits/'
+                           'frey_faces_fixed_split.pklt',
+                           datasetfolder + '/fixed_split.pkl')
 
     f = gzip.open(dataset+'.pkl.gz', 'rb')
     data = pkl.load(f)[0].reshape(-1,28,20).astype('float32')
@@ -222,11 +228,18 @@ def load_lfw(dataset=_get_datafolder_path()+'/lfw/lfw', normalize=True, dequanti
     '''
 
     dataset="%s_%0.2f.cpkl"%(dataset,size)
+    datasetfolder = os.path.dirname(dataset)
     if not os.path.isfile(dataset):
-        datasetfolder = os.path.dirname(dataset)
         if not os.path.exists(datasetfolder):
             os.makedirs(datasetfolder)
         _download_lwf(dataset,size)
+
+    if not os.path.isfile(datasetfolder + '/fixed_split.pkl'):
+        urllib.urlretrieve('https://raw.githubusercontent.com/casperkaae/'
+                           'extra_parmesan/master/data_splits/'
+                           'lfw_fixed_split.pkl',
+                           datasetfolder + '/fixed_split.pkl')
+
 
     f = gzip.open(dataset, 'rb')
     data = cPkl.load(f)[0].astype('float32')
