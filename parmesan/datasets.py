@@ -188,10 +188,13 @@ def cifar10(datasets_dir=_get_datafolder_path(), num_val=5000):
 
 
 
-def load_frey_faces(dataset=_get_datafolder_path()+'/frey_faces/frey_faces', normalize=True):
+def load_frey_faces(dataset=_get_datafolder_path()+'/frey_faces/frey_faces', normalize=True, dequantify=True):
     '''
-    Loads the frey faces dataset
-    :param dataset: path to dataset file
+    :param dataset:
+    :param normalize:
+    :param dequantify: Add uniform noise to dequantify the data following
+        Uria et. al 2013 "RNADE: The real-valued neural autoregressive density-estimator"
+    :return:
     '''
     if not os.path.isfile(dataset + '.pkl.gz'):
         datasetfolder = os.path.dirname(dataset+'.pkl.gz')
@@ -202,8 +205,10 @@ def load_frey_faces(dataset=_get_datafolder_path()+'/frey_faces/frey_faces', nor
     f = gzip.open(dataset+'.pkl.gz', 'rb')
     data = pkl.load(f)[0].astype('float32')
     f.close()
+    if dequantify:
+        data = data + np.random.uniform(0,1,size=data.shape).astype('float32')
     if normalize:
-        data = (data - np.min(data)) / (np.max(data)-np.min(data))
+        data = data / 256.
     return data
 
 def load_lfw(dataset=_get_datafolder_path()+'/lfw/lfw', normalize=True, dequantify=True, size=0.25):
