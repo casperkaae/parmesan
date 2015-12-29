@@ -10,6 +10,15 @@ import urllib
 from scipy.io import loadmat
 from sklearn.datasets import fetch_lfw_people
 
+from sklearn.datasets import fetch_20newsgroups
+from sklearn.feature_extraction.text import CountVectorizer
+from nltk.stem import WordNetLemmatizer
+from nltk.stem.porter import PorterStemmer as EnglishStemmer
+from nltk.tokenize import wordpunct_tokenize as wordpunct_tokenize
+import re
+import string
+
+
 def _unpickle(f):
     import cPickle
     fo = open(f, 'rb')
@@ -324,3 +333,82 @@ def _download_svhn(dataset):
     with open(dataset +'svhn_extra.cpkl', 'w') as f:
         pkl.dump([extra_x,extra_y],f,protocol=cPkl.HIGHEST_PROTOCOL)
     os.remove(dataset+'train_32x32.mat'),os.remove(dataset+'test_32x32.mat'),os.remove(dataset+'extra_32x32.mat')
+
+
+def load_20newsgroup(dataset=_get_datafolder_path()+'/20newsgroup/',max_features=1000,normalize_by_doc_len=True):
+    '''
+    Loads 20 newsgroup dataset
+    :param dataset: path to dataset file
+    :return: None
+    '''
+
+    if not os.path.isfile(dataset + '20newsgroup.pkl'):
+        datasetfolder = os.path.dirname(dataset)
+        if not os.path.exists(datasetfolder):
+            os.makedirs(datasetfolder)
+
+    if not os.path.isfile(dataset + '20newsgroup_mf'+ str(max_features) + '.pkl'):
+        train_set,test_set = _download_20newsgroup()
+        train_set, test_set, vocab_train = _bow(train_set, test_set, max_features=max_features)
+        with open(dataset + '20newsgroup_mf'+ str(max_features) + '.pkl','w') as f:
+            pkl.dump([train_set, test_set, vocab_train],f)
+
+    with open(dataset + '20newsgroup_mf'+ str(max_features) + '.pkl','r') as f:
+        train_set, test_set, vocab_train = pkl.load(f)
+
+    x_train, y_train = train_set
+    x_test, y_test = test_set
+
+    if normalize_by_doc_len:
+        x_train = x_train / (x_train + 1e-8).sum(keepdims=True, axis=1)
+        x_test = x_test / (x_test + 1e-8).sum(keepdims=True, axis=1)
+
+    return x_train, y_train, x_test, y_test
+
+def _download_20newsgroup():
+    """
+    Download the 20 newsgroups dataset from scikitlearn.
+    :return: The train, test and validation set.
+    """
+    print "downloading 20 newsgroup train data...."
+    newsgroups_train = fetch_20newsgroups(subset='train', remove=('headers', 'footers', 'quotes'))
+    print "downloading 20 newsgroup test data...."
+    newsgroups_test = fetch_20newsgroups(subset='test', remove=('headers', 'footers', 'quotes'))
+    train_set = (newsgroups_train.data, newsgroups_train.target)
+    test_set = (newsgroups_test.data, newsgroups_test.target)
+
+    return train_set,test_set
+
+def _bow(train, test, max_features=1000):
+    x_train, y_train = train
+    x_test, y_test = test
+
+
+    stemmer = EnglishStemmer()
+    lemmatizer = WordNetLemmatizer()
+    for i in range(len(x_train)):
+        x_train[i] = " ".join([lemmatizer.lemmatize(stemmer.stem(token.lower())) for token in wordpunct_tokenize(
+            re.sub('[%s]' % re.escape(string.punctuation), '', x_train[i]))])
+
+    vectorizer_train = CountVectorizer(strip_accents='ascii', stop_words='english',
+                                 token_pattern=r"(?u)\b\w[a-z]\w+[a-z]\b", max_features=max_features,
+                                 vocabulary=None, dtype='float32')
+    x_train = vectorizer_train.fit_transform(x_train).toarray()
+
+
+    vocab_train = vectorizer_train.get_feature_names()
+    vectorizer_test = CountVectorizer(strip_accents='ascii', stop_words='english',
+                                 token_pattern=r"(?u)\b\w[a-z]\w+[a-z]\b", max_features=max_features,
+                                 vocabulary=vocab_train, dtype='float32')
+    x_test = vectorizer_test.fit_transform(x_test).toarray()
+
+    # remove documents with no words
+    r = np.where(x_train.sum(axis=1) > 0.)[0]
+    x_train = x_train[r, :]
+    y_train = y_train[r]
+
+    r = np.where(x_test.sum(axis=1) > 0.)[0]
+    x_test = x_test[r, :]
+    y_test = y_test[r]
+
+    return (x_train, y_train),(x_test, y_test), vocab_train
