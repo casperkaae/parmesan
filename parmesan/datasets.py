@@ -335,6 +335,7 @@ def _download_svhn(dataset):
     os.remove(dataset+'train_32x32.mat'),os.remove(dataset+'test_32x32.mat'),os.remove(dataset+'extra_32x32.mat')
 
 
+
 def load_20newsgroup(dataset=_get_datafolder_path()+'/20newsgroup/',max_features=1000,normalize_by_doc_len=True):
     '''
     Loads 20 newsgroup dataset
@@ -360,10 +361,10 @@ def load_20newsgroup(dataset=_get_datafolder_path()+'/20newsgroup/',max_features
     x_test, y_test = test_set
 
     if normalize_by_doc_len:
-        x_train = x_train / (x_train + 1e-8).sum(keepdims=True, axis=1)
-        x_test = x_test / (x_test + 1e-8).sum(keepdims=True, axis=1)
+        x_train = x_train / (x_train).sum(keepdims=True, axis=1)
+        x_test = x_test / (x_test).sum(keepdims=True, axis=1)
 
-    return x_train, y_train, x_test, y_test
+    return x_train.astype('float32'), _one_hot(y_train).astype('float32'), x_test.astype('float32'), _one_hot(y_test).astype('float32')
 
 def _download_20newsgroup():
     """
@@ -412,3 +413,8 @@ def _bow(train, test, max_features=1000):
     y_test = y_test[r]
 
     return (x_train, y_train),(x_test, y_test), vocab_train
+
+def _one_hot(x,n_labels=None):
+    if n_labels == None:
+        n_labels = np.max(x)-1
+    return np.eye(n_labels)[x]
