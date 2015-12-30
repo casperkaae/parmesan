@@ -2,7 +2,7 @@ import numpy as np
 import pickle as pkl
 import cPickle as cPkl
 
-import gzip
+import gzip, tarfile
 import tarfile
 import fnmatch
 import os
@@ -10,7 +10,7 @@ import urllib
 from scipy.io import loadmat
 from sklearn.datasets import fetch_lfw_people
 
-from sklearn.datasets import fetch_20newsgroups
+from sklearn.datasets import fetch_20newsgroups, fetch_rcv1
 from sklearn.feature_extraction.text import CountVectorizer
 from nltk.stem import WordNetLemmatizer
 from nltk.stem.porter import PorterStemmer as EnglishStemmer
@@ -128,73 +128,131 @@ def load_mnist_binarized(dataset=_get_datafolder_path()+'/mnist_binarized/mnist.
     f.close()
     return x_train, x_valid, x_test
 
+def _download_rcv1():
+    """
+    Download the rcv1 dataset from scikitlearn.
+    :return: The train, test and validation set.
+    """
+    print "downloading rcv1 train data...."
+    newsgroups_train = fetch_rcv1(subset='train')
+    print "downloading rcv1 test data...."
+    newsgroups_test = fetch_rcv1(subset='test')
+    train_set = (newsgroups_train.data, newsgroups_train.target)
+    test_set = (newsgroups_test.data, newsgroups_test.target)
 
-def cifar10(datasets_dir=_get_datafolder_path(), num_val=5000):
-    raise Warning('cifar10 loader is untested!')
-    # this code is largely cp from Kyle Kastner:
-    #
-    # https://gist.github.com/kastnerkyle/f3f67424adda343fef40
-    try:
-        import urllib
-        urllib.urlretrieve('http://google.com')
-    except AttributeError:
-        import urllib.request as urllib
-    url = 'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
-    data_file = os.path.join(datasets_dir, 'cifar-10-python.tar.gz')
-    data_dir = os.path.join(datasets_dir, 'cifar-10-batches-py')
+    return train_set,test_set
 
-    if not os.path.exists(datasets_dir):
-        os.makedirs(datasets_dir)
 
-    if not os.path.isfile(data_file):
-        urllib.urlretrieve(url, data_file)
-        org_dir = os.getcwd()
-        with tarfile.open(data_file) as tar:
-            os.chdir(datasets_dir)
-            tar.extractall()
-        os.chdir(org_dir)
+def _download_20newsgroup():
+    """
+    Download the 20 newsgroups dataset from scikitlearn.
+    :return: The train, test and validation set.
+    """
+    print "downloading 20 newsgroup train data...."
+    newsgroups_train = fetch_20newsgroups(subset='train', remove=('headers', 'footers', 'quotes'))
+    print "downloading 20 newsgroup test data...."
+    newsgroups_test = fetch_20newsgroups(subset='test', remove=('headers', 'footers', 'quotes'))
+    train_set = (newsgroups_train.data, newsgroups_train.target)
+    test_set = (newsgroups_test.data, newsgroups_test.target)
 
-    train_files = []
-    for filepath in fnmatch.filter(os.listdir(data_dir), 'data*'):
-        train_files.append(os.path.join(data_dir, filepath))
-    train_files = sorted(train_files, key=lambda x: x.split("_")[-1])
+    return train_set,test_set
 
-    test_file = os.path.join(data_dir, 'test_batch')
+def _bow(train, test, max_features=1000):
+    '''
+    bag-of-words encoding helper function
+    '''
+    x_train, y_train = train
+    x_test, y_test = test
 
-    x_train, targets_train = [], []
-    for f in train_files:
-        d = _unpickle(f)
-        x_train.append(d['data'])
-        targets_train.append(d['labels'])
-    x_train = np.array(x_train, dtype='uint8')
-    shp = x_train.shape
-    x_train = x_train.reshape(shp[0] * shp[1], 3, 32, 32)
-    targets_train = np.array(targets_train)
-    targets_train = targets_train.ravel()
 
-    d = _unpickle(test_file)
-    x_test = d['data']
-    targets_test = d['labels']
-    x_test = np.array(x_test, dtype='uint8')
-    x_test = x_test.reshape(-1, 3, 32, 32)
-    targets_test = np.array(targets_test)
-    targets_test = targets_test.ravel()
+    stemmer = EnglishStemmer()
+    lemmatizer = WordNetLemmatizer()
+    for i in range(len(x_train)):
+        x_train[i] = " ".join([lemmatizer.lemmatize(stemmer.stem(token.lower())) for token in wordpunct_tokenize(
+            re.sub('[%s]' % re.escape(string.punctuation), '', x_train[i]))])
 
-    if num_val is not None:
-        perm = np.random.permutation(x_train.shape[0])
-        x = x_train[perm]
-        y = targets_train[perm]
+    vectorizer_train = CountVectorizer(strip_accents='ascii', stop_words='english',
+                                 token_pattern=r"(?u)\b\w[a-z]\w+[a-z]\b", max_features=max_features,
+                                 vocabulary=None, dtype='float32')
+    x_train = vectorizer_train.fit_transform(x_train).toarray()
 
-        x_valid = x[:num_val]
-        targets_valid = y[:num_val]
-        x_train = x[num_val:]
-        targets_train = y[num_val:]
-        return (x_train, targets_train,
-                x_valid, targets_valid,
-                x_test, targets_test)
-    else:
-        return x_train, targets_train, x_test, targets_test
 
+    vocab_train = vectorizer_train.get_feature_names()
+    vectorizer_test = CountVectorizer(strip_accents='ascii', stop_words='english',
+                                 token_pattern=r"(?u)\b\w[a-z]\w+[a-z]\b", max_features=max_features,
+                                 vocabulary=vocab_train, dtype='float32')
+    x_test = vectorizer_test.fit_transform(x_test).toarray()
+
+    # remove documents with no words
+    r = np.where(x_train.sum(axis=1) > 0.)[0]
+    x_train = x_train[r, :]
+    y_train = y_train[r]
+
+    r = np.where(x_test.sum(axis=1) > 0.)[0]
+    x_test = x_test[r, :]
+    y_test = y_test[r]
+
+    return (x_train, y_train),(x_test, y_test), vocab_train
+
+
+def _download_cifar10(dataset):
+    """
+    Download the Cifar10 dataset if it is not present.
+    """
+    origin = (
+        'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
+    )
+    print 'Downloading data from %s' % origin
+    urllib.urlretrieve(origin, dataset)
+
+
+def load_cifar10(dataset=_get_datafolder_path()+'/cifar10/cifar-10-python.tar.gz', normalize=True, dequantify=True):
+    '''
+    Loads the cifar10 dataset
+    :param dataset: path to dataset file
+    :param normalize: normalize the x data to the range [0,1]
+    :param dequantify: Add uniform noise to dequantify the data following
+        Uria et. al 2013 "RNADE: The real-valued neural autoregressive density-estimator"
+    :return: train and test data
+    '''
+    datasetfolder = os.path.dirname(dataset)
+    batch_folder = datasetfolder+ '/cifar-10-batches-py/'
+    if not os.path.isfile(dataset):
+        if not os.path.exists(datasetfolder):
+            os.makedirs(datasetfolder)
+        _download_cifar10(dataset)
+
+    if not os.path.isfile(batch_folder + 'data_batch_5'):  #check if a file in the dataset is extracted
+        with tarfile.open(dataset) as tar:
+            tar.extractall(os.path.dirname(dataset))
+
+    train_x, train_y = [],[]
+    for i in ['1','2','3','4','5']:
+        with open(batch_folder + 'data_batch_'+ i,'r') as f:
+            data = cPkl.load(f)
+            train_x += [data['data']]
+            train_y += [data['labels']]
+    train_x = np.concatenate(train_x)
+    train_y = np.concatenate(train_y)
+
+
+    with open(batch_folder + 'test_batch','r') as f:
+        data = cPkl.load(f)
+        test_x = data['data']
+        test_y = np.asarray(data['labels'])
+
+
+    if dequantify:
+        train_x = train_x + np.random.uniform(0,1,size=train_x.shape).astype('float32')
+        test_x = test_x + np.random.uniform(0,1,size=test_x.shape).astype('float32')
+    if normalize:
+        train_x = train_x / 256.
+        test_x = test_x / 256.
+
+    train_x = train_x.reshape((50000, 3, 32, 32)).transpose(0, 2, 3, 1).astype('float32')
+    test_x = test_x.reshape((10000, 3, 32, 32)).transpose(0, 2, 3, 1).astype('float32')
+
+    return train_x, train_y, test_x, test_y
 
 
 def load_frey_faces(dataset=_get_datafolder_path()+'/frey_faces/frey_faces', normalize=True, dequantify=True):
@@ -343,10 +401,9 @@ def load_20newsgroup(dataset=_get_datafolder_path()+'/20newsgroup/',max_features
     :return: None
     '''
 
-    if not os.path.isfile(dataset + '20newsgroup.pkl'):
-        datasetfolder = os.path.dirname(dataset)
-        if not os.path.exists(datasetfolder):
-            os.makedirs(datasetfolder)
+    datasetfolder = os.path.dirname(dataset)
+    if not os.path.exists(datasetfolder):
+        os.makedirs(datasetfolder)
 
     if not os.path.isfile(dataset + '20newsgroup_mf'+ str(max_features) + '.pkl'):
         train_set,test_set = _download_20newsgroup()
@@ -366,53 +423,36 @@ def load_20newsgroup(dataset=_get_datafolder_path()+'/20newsgroup/',max_features
 
     return x_train.astype('float32'), y_train.astype('float32'), x_test.astype('float32'), y_test.astype('float32')
 
-def _download_20newsgroup():
-    """
-    Download the 20 newsgroups dataset from scikitlearn.
-    :return: The train, test and validation set.
-    """
-    print "downloading 20 newsgroup train data...."
-    newsgroups_train = fetch_20newsgroups(subset='train', remove=('headers', 'footers', 'quotes'))
-    print "downloading 20 newsgroup test data...."
-    newsgroups_test = fetch_20newsgroups(subset='test', remove=('headers', 'footers', 'quotes'))
-    train_set = (newsgroups_train.data, newsgroups_train.target)
-    test_set = (newsgroups_test.data, newsgroups_test.target)
 
-    return train_set,test_set
+def load_rcv1(dataset=_get_datafolder_path()+'/rcv1/',max_features=10000,normalize_by_doc_len=True):
+    '''
+    Loads 20 newsgroup dataset
+    :param dataset: path to dataset file
+    :return: None
+    '''
 
-def _bow(train, test, max_features=1000):
-    x_train, y_train = train
-    x_test, y_test = test
+    datasetfolder = os.path.dirname(dataset)
+    if not os.path.exists(datasetfolder):
+        os.makedirs(datasetfolder)
 
+    if not os.path.isfile(dataset + 'rcv1_mf'+ str(max_features) + '.cpkl'):
+        train_set,test_set = _download_rcv1()
+        train_set, test_set, vocab_train = _bow(train_set, test_set, max_features=max_features)
+        with open(dataset + 'rcv1_mf'+ str(max_features) + '.cpkl','w') as f:
+            cPkl.dump([train_set, test_set, vocab_train],f)
 
-    stemmer = EnglishStemmer()
-    lemmatizer = WordNetLemmatizer()
-    for i in range(len(x_train)):
-        x_train[i] = " ".join([lemmatizer.lemmatize(stemmer.stem(token.lower())) for token in wordpunct_tokenize(
-            re.sub('[%s]' % re.escape(string.punctuation), '', x_train[i]))])
+    with open(dataset + 'rcv1_mf'+ str(max_features) + '.cpkl','r') as f:
+        train_set, test_set, vocab_train = cPkl.load(f)
 
-    vectorizer_train = CountVectorizer(strip_accents='ascii', stop_words='english',
-                                 token_pattern=r"(?u)\b\w[a-z]\w+[a-z]\b", max_features=max_features,
-                                 vocabulary=None, dtype='float32')
-    x_train = vectorizer_train.fit_transform(x_train).toarray()
+    x_train, y_train = train_set
+    x_test, y_test = test_set
 
+    if normalize_by_doc_len:
+        x_train = x_train / (x_train).sum(keepdims=True, axis=1)
+        x_test = x_test / (x_test).sum(keepdims=True, axis=1)
 
-    vocab_train = vectorizer_train.get_feature_names()
-    vectorizer_test = CountVectorizer(strip_accents='ascii', stop_words='english',
-                                 token_pattern=r"(?u)\b\w[a-z]\w+[a-z]\b", max_features=max_features,
-                                 vocabulary=vocab_train, dtype='float32')
-    x_test = vectorizer_test.fit_transform(x_test).toarray()
+    return x_train.astype('float32'), y_train.astype('float32'), x_test.astype('float32'), y_test.astype('float32')
 
-    # remove documents with no words
-    r = np.where(x_train.sum(axis=1) > 0.)[0]
-    x_train = x_train[r, :]
-    y_train = y_train[r]
-
-    r = np.where(x_test.sum(axis=1) > 0.)[0]
-    x_test = x_test[r, :]
-    y_test = y_test[r]
-
-    return (x_train, y_train),(x_test, y_test), vocab_train
 
 def _one_hot(x,n_labels=None):
     if n_labels == None:
