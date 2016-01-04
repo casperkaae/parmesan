@@ -8,9 +8,8 @@ import fnmatch
 import os, shutil
 import urllib
 from scipy.io import loadmat
-from scipy.misc import imresize
 from sklearn.datasets import fetch_lfw_people
-from scipy.ndimage import imread
+from scipy.misc import imread,imresize
 from sklearn.datasets import fetch_20newsgroups, fetch_rcv1
 from sklearn.feature_extraction.text import CountVectorizer
 from nltk.stem import WordNetLemmatizer
@@ -90,11 +89,19 @@ def _download_omniglot(dataset):
 
     train = []
     test = []
+
+    def _load_image(fn):
+        image = imread(fn, True)
+        image = imresize(image, (32, 32), interp='bicubic')
+        image = image.reshape((-1))
+        image = np.abs(image-255.)/255.
+        return image
+
     for p in matches:
         if any(x in p for x in ['16.png','17.png','18.png','19.png','20.png']):
-            test.append(imresize(np.array(imread(p)),interp='nearest',size=(32,32)))
+            test.append(_load_image(p))
         else:
-            train.append(imresize(np.array(imread(p)),interp='nearest',size=(32,32)))
+            train.append(_load_image(p))
 
     shutil.rmtree(background+'/')
     shutil.rmtree(evaluation+'/')
@@ -155,8 +162,8 @@ def load_omniglot(dataset=_get_datafolder_path()+'/omniglot'):
     with open(dataset+'/omniglot.cpkl', 'rb') as f:
         train, test = cPkl.load(f)
 
-    train = train.astype('float32')/np.float32(255)
-    test = test.astype('float32')/np.float32(255)
+    train = train.astype('float32')
+    test = test.astype('float32')
 
     return train, test
 
