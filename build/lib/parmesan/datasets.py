@@ -2,15 +2,14 @@ import numpy as np
 import pickle as pkl
 import cPickle as cPkl
 
-import gzip, tarfile, zipfile
+import gzip, tarfile
 import tarfile
 import fnmatch
-import os, shutil
+import os
 import urllib
 from scipy.io import loadmat
-from scipy.misc import imresize
 from sklearn.datasets import fetch_lfw_people
-from scipy.ndimage import imread
+
 from sklearn.datasets import fetch_20newsgroups, fetch_rcv1
 from sklearn.feature_extraction.text import CountVectorizer
 from nltk.stem import WordNetLemmatizer
@@ -54,57 +53,6 @@ def _download_mnist_realval(dataset):
     print 'Downloading data from %s' % origin
     urllib.urlretrieve(origin, dataset)
 
-
-
-def _download_omniglot(dataset):
-    """
-    Download the omniglot dataset if it is not present.
-    :return: The train, test and validation set.
-    """
-
-    origin_eval = (
-        "https://github.com/brendenlake/omniglot/raw/master/python/images_evaluation.zip"
-    )
-    origin_back = (
-        "https://github.com/brendenlake/omniglot/raw/master/python/images_background.zip"
-    )
-    print 'Downloading data from %s' % origin_eval
-    urllib.urlretrieve(origin_eval, dataset + '/images_evaluation.zip')
-    print 'Downloading data from %s' % origin_back
-    urllib.urlretrieve(origin_back, dataset + '/images_background.zip')
-
-    with zipfile.ZipFile(dataset + '/images_evaluation.zip', "r") as z:
-        z.extractall(dataset)
-    with zipfile.ZipFile(dataset + '/images_background.zip', "r") as z:
-        z.extractall(dataset)
-
-    background =  dataset + '/images_background'
-    evaluation =  dataset + '/images_evaluation'
-    matches = []
-    for root, dirnames, filenames in os.walk(background):
-        for filename in fnmatch.filter(filenames, '*.png'):
-            matches.append(os.path.join(root, filename))
-    for root, dirnames, filenames in os.walk(evaluation):
-        for filename in fnmatch.filter(filenames, '*.png'):
-            matches.append(os.path.join(root, filename))
-
-    train = []
-    test = []
-    for p in matches:
-        if any(x in p for x in ['16.png','17.png','18.png','19.png','20.png']):
-            test.append(imresize(np.array(imread(p)),interp='nearest',size=(32,32)))
-        else:
-            train.append(imresize(np.array(imread(p)),interp='nearest',size=(32,32)))
-
-    shutil.rmtree(background+'/')
-    shutil.rmtree(evaluation+'/')
-
-    test = np.asarray(test)
-    train = np.asarray(train)
-    with open(dataset+'/omniglot.cpkl','w') as f:
-        cPkl.dump([train, test],f,protocol=cPkl.HIGHEST_PROTOCOL)
-
-
 def _download_lwf(dataset,size):
     '''
     :param dataset:
@@ -140,25 +88,6 @@ def _get_datafolder_path():
     full_path = os.path.abspath('.')
     path = full_path +'/data'
     return path
-
-
-def load_omniglot(dataset=_get_datafolder_path()+'/omniglot'):
-    '''
-    Loads the real valued MNIST dataset
-    :param dataset: path to dataset file
-    :return: None
-    '''
-    if not os.path.exists(dataset):
-        os.makedirs(dataset)
-        _download_omniglot(dataset)
-
-    with open(dataset+'/omniglot.cpkl', 'rb') as f:
-        train, test = cPkl.load(f)
-
-    train = train.astype('float32')/np.float32(255)
-    test = test.astype('float32')/np.float32(255)
-
-    return train, test
 
 
 def load_mnist_realval(dataset=_get_datafolder_path()+'/mnist_real/mnist.pkl.gz'):
