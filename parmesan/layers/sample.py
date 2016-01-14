@@ -57,6 +57,12 @@ class SampleLayer(lasagne.layers.MergeLayer):
     iw_samples : int or T.scalar
         Number of importance samples in the sum over k in eq. (8) in [BURDA]_.
 
+    nonlinearity : callable or None
+        The nonlinearity that is applied to the log_var input layer to transform
+        it into a standard deviation. By default we assume that
+        log_var = log(sigma^2) and hence the corresponding nonlinearity is
+        f(x) = T.exp(0.5*x) such that T.exp(0.5*log(sigma^2)) = sigma
+
     References
     ----------
         ..  [BURDA] Burda, Yuri, Roger Grosse, and Ruslan Salakhutdinov.
@@ -64,11 +70,12 @@ class SampleLayer(lasagne.layers.MergeLayer):
             arXiv preprint arXiv:1509.00519 (2015).
     """
 
-    def __init__(self, mu, log_var, eq_samples=1, iw_samples=1, **kwargs):
+    def __init__(self, mu, log_var, eq_samples=1, iw_samples=1, nonlinearity=lambda x: T.exp(0.5*x),  **kwargs):
         super(SampleLayer, self).__init__([mu, log_var], **kwargs)
 
         self.eq_samples = eq_samples
         self.iw_samples = iw_samples
+        self.nonlinearity = nonlinearity
 
         self._srng = RandomStreams(
             lasagne.random.get_rng().randint(1, 2147462579))
@@ -91,6 +98,6 @@ class SampleLayer(lasagne.layers.MergeLayer):
              dtype=theano.config.floatX)
 
         z = mu.dimshuffle(0,'x','x',1) + \
-            T.exp(0.5 * log_var.dimshuffle(0,'x','x',1)) * eps
+            self.nonlinearity( log_var.dimshuffle(0,'x','x',1)) * eps
 
         return z.reshape((-1,num_latent))
