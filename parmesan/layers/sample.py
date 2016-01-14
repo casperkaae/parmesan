@@ -45,10 +45,19 @@ class SampleLayer(lasagne.layers.MergeLayer):
 
     Parameters
     ----------
-    mu, log_var : :class:`Layer` instances
-        Parameterizing the mean and log(variance) of the distribution to sample
-        from as described in [BURDA]_. The code assumes that these have the same
-        number of dimensions.
+    mu : class:`Layer` instance
+        Parameterizing the mean of the distribution to sample
+        from as described in [BURDA]_.
+
+    log_var : class:`Layer` instance
+        By default assumed to parametrize log(sigma^2) of the distribution to
+        sample from as described in [BURDA]_ which is transformed to sigma using
+        the nonlinearity function as described below. Effectively this means
+        that the nonlinearity function controls what log_var parametrizes. A few
+        common examples:
+        -nonlinearity = lambda x: T.exp(0.5*x) => log_var = log(sigma^2)[default]
+        -nonlinearity = lambda x: T.sqrt(x) => log_var = sigma^2
+        -nonlinearity = lambda x: x => log_var = sigma 
 
     eq_samples : int or T.scalar
         Number of Monte Carlo samples used to estimate the expectation over
