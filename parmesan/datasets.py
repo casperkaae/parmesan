@@ -2,6 +2,7 @@ import numpy as np
 import pickle as pkl
 import cPickle as cPkl
 
+from scipy.io import loadmat
 import gzip, tarfile, zipfile
 import tarfile
 import fnmatch
@@ -52,6 +53,18 @@ def _download_mnist_realval(dataset):
     )
     print 'Downloading data from %s' % origin
     urllib.urlretrieve(origin, dataset)
+
+def _download_omniglot_iwae(dataset):
+    """
+    Download the MNIST dataset if it is not present.
+    :return: The train, test and validation set.
+    """
+    origin = (
+        'https://github.com/yburda/iwae/raw/master/datasets/OMNIGLOT/chardata.mat'
+    )
+    print 'Downloading data from %s' % origin
+    urllib.urlretrieve(origin, dataset + '/chardata.mat')
+
 
 
 
@@ -166,6 +179,29 @@ def load_omniglot(dataset=_get_datafolder_path()+'/omniglot'):
     test = test.astype('float32')
 
     return train, test
+
+
+def load_omniglot_iwae(dataset=_get_datafolder_path()+'/omniglot_iwae'):
+    '''
+    Loads the real valued MNIST dataset
+    :param dataset: path to dataset file
+    :return: None
+    '''
+    if not os.path.exists(dataset):
+        os.makedirs(dataset)
+        _download_omniglot_iwae(dataset)
+
+    data = loadmat(dataset+'/chardata.mat')
+
+    train_x = data['data'].astype('float32').T
+    train_t = data['target'].astype('float32').T
+    train_char = data['targetchar'].astype('float32')
+    test_x = data['testdata'].astype('float32').T
+    test_t = data['testtarget'].astype('float32').T
+    test_char = data['testtargetchar'].astype('float32')
+
+
+    return train_x, train_t, train_char, test_x, test_t, test_char
 
 
 def load_mnist_realval(dataset=_get_datafolder_path()+'/mnist_real/mnist.pkl.gz'):

@@ -57,7 +57,7 @@ class SampleLayer(lasagne.layers.MergeLayer):
         common examples:
         -nonlinearity = lambda x: T.exp(0.5*x) => log_var = log(sigma^2)[default]
         -nonlinearity = lambda x: T.sqrt(x) => log_var = sigma^2
-        -nonlinearity = lambda x: x => log_var = sigma 
+        -nonlinearity = lambda x: x => log_var = sigma
 
     eq_samples : int or T.scalar
         Number of Monte Carlo samples used to estimate the expectation over
