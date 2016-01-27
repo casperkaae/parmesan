@@ -194,10 +194,10 @@ def load_omniglot_iwae(dataset=_get_datafolder_path()+'/omniglot_iwae'):
     data = loadmat(dataset+'/chardata.mat')
 
     train_x = data['data'].astype('float32').T
-    train_t = data['target'].astype('float32').T
+    train_t = np.argmax(data['target'].astype('float32').T,axis=1)
     train_char = data['targetchar'].astype('float32')
     test_x = data['testdata'].astype('float32').T
-    test_t = data['testtarget'].astype('float32').T
+    test_t = np.argmax(data['testtarget'].astype('float32').T,axis=1)
     test_char = data['testtargetchar'].astype('float32')
 
 
