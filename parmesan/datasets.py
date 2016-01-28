@@ -93,7 +93,7 @@ def _download_norb_small(dataset):
     test_t = loadmat(dataset + '/smallnorb_test_t.mat')['testlabels'].flatten().astype('float32')
     test_t = np.concatenate([test_t, test_t])
     with open(dataset+'/norbsmall32x32.cpkl','w') as f:
-        cPkl.dump([train_x, train_t, test_x, test_x],f,protocol=cPkl.HIGHEST_PROTOCOL)
+        cPkl.dump([train_x, train_t, test_x, test_t],f,protocol=cPkl.HIGHEST_PROTOCOL)
 
 
 def load_norb_small(dataset=_get_datafolder_path()+'/norb_small/norbsmall32x32.cpkl', dequantify=True, normalize=True ):
