@@ -19,6 +19,10 @@ from nltk.tokenize import wordpunct_tokenize as wordpunct_tokenize
 import re
 import string
 
+def _get_datafolder_path():
+    full_path = os.path.abspath('.')
+    path = full_path +'/data'
+    return path
 
 def _unpickle(f):
     import cPickle
@@ -66,6 +70,55 @@ def _download_omniglot_iwae(dataset):
     urllib.urlretrieve(origin, dataset + '/chardata.mat')
 
 
+def _download_norb_small(dataset):
+    """
+    Download the Norb dataset
+    """
+
+    print 'Downloading small resized norb data'
+    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x46789x9x18x6x2x32x32-training-dat-matlab-bicubic.mat', dataset + '/smallnorb_train_x.mat')
+    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x46789x9x18x6x2x96x96-training-cat-matlab.mat', dataset + '/smallnorb_train_t.mat')
+
+    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x01235x9x18x6x2x32x32-testing-dat-matlab-bicubic.mat', dataset + '/smallnorb_test_x.mat')
+    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x01235x9x18x6x2x96x96-testing-cat-matlab.mat', dataset + '/smallnorb_test_t.mat')
+
+
+    data = loadmat(dataset + '/smallnorb_train_x.mat')['traindata']
+    train_x = np.concatenate([data[:,0,:].T, data[:,0,:].T]).astype('float32')
+    train_t = loadmat(dataset + '/smallnorb_train_t.mat')['trainlabels'].flatten().astype('float32')
+    train_t = np.concatenate([train_t, train_t])
+
+    data = loadmat(dataset + '/smallnorb_test_x.mat')['testdata']
+    test_x = np.concatenate([data[:,0,:].T, data[:,0,:].T]).astype('float32')
+    test_t = loadmat(dataset + '/smallnorb_test_t.mat')['testlabels'].flatten().astype('float32')
+    test_t = np.concatenate([test_t, test_t])
+    with open(dataset+'/norbsmall32x32.cpkl','w') as f:
+        cPkl.dump([train_x, train_t, test_x, test_x],f,protocol=cPkl.HIGHEST_PROTOCOL)
+
+
+def load_norb_small(dataset=_get_datafolder_path()+'/norb_small/norbsmall32x32.cpkl', dequantify=True, normalize=True ):
+    '''
+    Loads the real valued MNIST dataset
+    :param dataset: path to dataset file
+    :return: None
+    '''
+    if not os.path.isfile(dataset):
+        datasetfolder = os.path.dirname(dataset)
+        if not os.path.exists(datasetfolder):
+            os.makedirs(datasetfolder)
+        _download_norb_small(datasetfolder)
+
+    with open(dataset,'r') as f:
+        train_x, train_t, test_x, test_t = cPkl.load(f)
+
+    if dequantify:
+        train_x = train_x + np.random.uniform(0,1,size=train_x.shape).astype('float32')
+        test_x = test_x + np.random.uniform(0,1,size=test_x.shape).astype('float32')
+    if normalize:
+        train_x = train_x / 256.
+        test_x = test_x / 256.
+
+    return train_x, train_t, test_x, test_t
 
 
 def _download_omniglot(dataset):
@@ -155,11 +208,6 @@ def _download_mnist_binarized(datapath):
     f = gzip.open(datapath +'/mnist.pkl.gz', 'w')
     pkl.dump([datasplits['train'],datasplits['valid'],datasplits['test']],f)
 
-
-def _get_datafolder_path():
-    full_path = os.path.abspath('.')
-    path = full_path +'/data'
-    return path
 
 
 def load_omniglot(dataset=_get_datafolder_path()+'/omniglot'):
