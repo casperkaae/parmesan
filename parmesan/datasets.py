@@ -96,6 +96,12 @@ def _download_norb_small(dataset):
         cPkl.dump([train_x, train_t, test_x, test_t],f,protocol=cPkl.HIGHEST_PROTOCOL)
 
 
+def _download_rotten_tomatoes(dataset):
+    origin = ('http://www.cs.cornell.edu/people/pabo/movie-review-data/rt-polaritydata.tar.gz')
+    print 'Downloading data from %s' % origin
+    urllib.urlretrieve(origin, dataset + '/rt-polaritydata.tar.gz')
+
+
 def load_norb_small(dataset=_get_datafolder_path()+'/norb_small/norbsmall32x32.cpkl', dequantify=True, normalize=True ):
     '''
     Loads the real valued MNIST dataset
@@ -614,6 +620,161 @@ def load_rcv1(dataset=_get_datafolder_path()+'/rcv1/',max_features=10000,normali
         x_test = x_test / (x_test).sum(keepdims=True, axis=1)
 
     return x_train.astype('float32'), y_train.astype('float32'), x_test.astype('float32'), y_test.astype('float32')
+
+
+def load_rotten_tomatoes(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
+                         vocab_size=40, minimum_len=None, maximum_len=None,
+                         seed=1234):
+    """Loader for rotten tomatoes sentiment analysis dataset
+
+    Loads dataset as characters
+
+    :param dataset: str
+        path to dataset file
+    :param vocab_size: int or str
+         number of vocab_size in VOCAB. Defaults to the 40 most frequent
+         vocab_size if str uses str as vocab
+    :param minimum_len: None or int
+        if None no filtering
+    :param maximum_len: None or int
+        if None no filtering
+    :param seed: int
+         random seed
+    :return: X, y, mask, vocab
+
+    Notes
+    -----
+    The vocab output can be used to encode several character dataset with
+    the same encoding.
+    """
+    from collections import Counter
+    try:
+        import pandas as pd
+    except:
+        raise ImportError('Pandas is required')
+
+    datasetfolder = os.path.dirname(dataset)
+
+    if not os.path.exists(datasetfolder):
+        os.makedirs(datasetfolder)
+
+    fn_pos = dataset + '/rt-polaritydata/rt-polarity.pos'
+    fn_neg = dataset + '/rt-polaritydata/rt-polarity.neg'
+    if not os.path.isfile(dataset + '/rt-polaritydata.tar.gz'):
+        _download_rotten_tomatoes(dataset)
+
+    with tarfile.open(dataset + '/rt-polaritydata.tar.gz', "r:gz") as tar:
+        tar.extractall(path=dataset)
+
+    # load review data
+    pos = pd.read_csv(
+        fn_pos, delimiter="\t", quoting=3, header=None)
+    neg = pd.read_csv(
+        fn_neg, header=None, delimiter="\t", quoting=3)
+    pos.columns = ["review"]
+    neg.columns = ["review"]
+
+    # helper clean function
+    def clean(l):
+        l = l.strip('\n')
+        l = l.rstrip(' ')
+        l = l.lower()
+        return l
+
+    pos_lst = [clean(l) for l in pos['review']]
+    neg_lst = [clean(l) for l in neg['review']]
+
+    # count character counts and return the "character" most frequently
+    # used vocab_size as list
+
+    if isinstance(vocab_size, int):
+        char_counts = Counter("".join(pos_lst + neg_lst))
+        char_counts_sorted = sorted(
+            char_counts.items(), key=lambda x:x[1], reverse=True)
+
+        chars, counts = zip(*char_counts_sorted[:vocab_size])
+
+        print "Using VOCAB with the %i most frequent characters \n |%s|" % (
+            vocab_size, "".join(chars))
+        print "Character counts", ", ".join(map(str, counts))
+
+        vocab = sorted(chars)
+        char2idx = {char:idx for idx, char in enumerate(vocab)}
+        unk_idx = max(char2idx.values()) + 1
+    else:
+        vocab = vocab_size
+        print "Using VOCAB: |%s|" % vocab_size
+        char2idx = {char:idx for idx, char in enumerate(vocab_size)}
+        unk_idx = max(char2idx.values()) + 1
+
+    # find maximum sequence length
+    max_len = max(map(len, pos_lst + neg_lst))
+
+    # helper function for converting chars to matrix format
+    def create_matrix(reviews, y_cls):
+        num_seqs = len(reviews)
+        X = np.zeros((num_seqs, max_len), dtype='int32') -1  # set all to -1
+        for row in range(num_seqs):
+            review = reviews[row]
+            for col in range(len(review)):
+                # try to look up key otherwise use unk_idx
+                if review[col] in char2idx:
+                    char_idx = char2idx[review[col]]
+                else:
+                    char_idx = unk_idx
+                X[row, col] = char_idx
+
+        mask = (X != -1).astype('float32')
+        X[X==-1] = 0
+        y = np.ones(num_seqs, dtype='int32')*y_cls
+        return X, y, mask
+
+    X_pos, y_pos, mask_pos = create_matrix(pos_lst, 1)
+    X_neg, y_neg, mask_neg = create_matrix(neg_lst, 0)
+    X = np.concatenate([X_pos, X_neg], axis=0)
+    y = np.concatenate([y_pos, y_neg], axis=0)
+    mask = np.concatenate([mask_pos, mask_neg])
+
+    print "-"*40
+    print "Minium length filter :", minimum_len
+    print "Maximum length filter:", maximum_len
+    if minimum_len is not None:
+        seq_lens = mask.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        print "Seqs below minimum   : %i" % np.invert(keep).sum()
+        X = X[keep, :]
+        y = y[keep]
+        mask = mask[keep, :]
+
+    if maximum_len is not None:
+        seq_lens = mask.sum(axis=1)
+        keep = seq_lens <= maximum_len
+        print "Seqs above maximum   : %i" % np.invert(keep).sum()
+        X = X[keep, :]
+        y = y[keep]
+        mask = mask[keep, :]
+
+    np.random.seed(seed)
+    p = np.random.permutation(X.shape[0])
+    X = X[p]
+    y = y[p]
+    mask = mask[p]
+
+    seq_lens = mask.sum(axis=1).astype('int32')
+    print "X                    :", X.shape, X.dtype
+    print "y                    :", y.shape, y.dtype
+    print "mask                 :", mask.shape, mask.dtype
+    print "MIN length           : ", seq_lens.min()
+    print "MAX length           : ", seq_lens.max()
+    print "MEAN length          : ", seq_lens.mean()
+    print "UNKOWN chars         : ", np.sum(X==unk_idx)
+    print "-"*40
+
+    # check that idx's in X is the number of vocab_size + unk_idx
+    n = vocab_size if isinstance(vocab_size, int) else len(vocab_size)
+    assert len(np.unique(X)) == n  + 1
+    assert sum(np.unique(y)) == 1 # check that y is 0,1
+    return X, y, mask, vocab
 
 
 def _one_hot(x,n_labels=None):
