@@ -663,6 +663,18 @@ def _create_matrix(reviews, y_cls, char2idx, max_len, unk_idx):
     y = np.ones(num_seqs, dtype='int32')*y_cls
     return X, y, mask
 
+def slice_masked_seq(x, mask, max_len):
+    num_seqs = x.shape[0]
+    output = np.zeros((num_seqs, max_len), dtype=x.dtype)
+    for row in range(num_seqs):
+        seq_len = np.sum(mask[row])
+        if seq_len <= max_len:
+            output[row] = x[row]
+        else: # longer need slicing
+            output[row] = x[:, -max_len:]
+    return output
+
+
 def load_rotten_tomatoes_character(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
                          vocab_size=40, minimum_len=None, maximum_len=None,
                          seed=1234):
@@ -753,8 +765,8 @@ def load_rotten_tomatoes_character(dataset=_get_datafolder_path()+'/rotten_tomat
         seq_lens = mask.sum(axis=1)
         keep = seq_lens <= maximum_len
         print "Seqs above maximum   : %i" % np.invert(keep).sum()
-        X = X[-maximum_len:, :]
-        mask = mask[-maximum_len:, :]
+        X = slice_masked_seq(X, mask, maximum_len)
+        mask = slice_masked_seq(mask, mask, maximum_len)
 
     np.random.seed(seed)
     p = np.random.permutation(X.shape[0])
@@ -812,6 +824,7 @@ def load_rotten_tomatoes_words(dataset=_get_datafolder_path()+'/rotten_tomatoes/
         l = re.sub("[^a-zA-Z]", " ", l)
         l = re.sub(' +',' ', l)
         l = l.rstrip()
+        l = l.lower()
         return l
 
     pos_lst = [clean(l) for l in pos['review']]
@@ -881,8 +894,8 @@ def load_rotten_tomatoes_words(dataset=_get_datafolder_path()+'/rotten_tomatoes/
         seq_lens = mask.sum(axis=1)
         keep = seq_lens <= maximum_len
         print "Seqs above maximum   : %i" % np.invert(keep).sum()
-        X = X[-maximum_len:, :]
-        mask = mask[-maximum_len:, :]
+        X =slice_masked_seq(X, mask, maximum_len)
+        mask = maximum_len(mask, mask, maximum_len)
 
 
     np.random.seed(seed)
@@ -936,6 +949,7 @@ def read_imdb(dataset):
         l = re.sub("[^a-zA-Z]", " ", l)
         l = re.sub(' +',' ', l)
         l = l.rstrip()
+        l = l.lower()
         return l
 
     def read_folder(folder):
@@ -1055,12 +1069,12 @@ def load_imdb_character(dataset=_get_datafolder_path()+'/imdb_sentiment/',
         seq_lens = mask_train.sum(axis=1)
         keep = seq_lens <= minimum_len
         print "Seqs above maximum   : %i" % np.invert(keep).sum()
-        X_train = X_train[-maximum_len:, :]
-        mask_train = mask_train[-maximum_len:, :]
-        X_train_unsup = X_train_unsup[-maximum_len:, :]
-        mask_train_unsup = mask_train_unsup[-maximum_len:, :]
-        X_test = X_test[-maximum_len:, :]
-        mask_test = mask_test[-maximum_len:, :]
+        X_train = slice_masked_seq(X_train, mask_train, maximum_len)
+        mask_train = slice_masked_seq(mask_train, mask_train, maximum_len)
+        X_train_unsup = slice_masked_seq(X_train_unsup, mask_train_unsup, maximum_len)
+        mask_train_unsup = slice_masked_seq(mask_train_unsup, mask_train_unsup, maximum_len)
+        X_test = slice_masked_seq(X_test, mask_test, maximum_len)
+        mask_test = slice_masked_seq(mask_test, mask_test, maximum_len)
 
     np.random.seed(seed)
     p = np.random.permutation(X_train.shape[0])
@@ -1096,7 +1110,7 @@ def load_imdb_character(dataset=_get_datafolder_path()+'/imdb_sentiment/',
            X_test, y_test, mask_test, vocab
 
 def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
-                         vocab_size=32000, minimum_len=None, maximum_len=None,
+                         vocab_size=18000, minimum_len=None, maximum_len=500,
                          seed=1234):
     """Loader for Imdb sentiment analysis dataset
 
@@ -1105,7 +1119,7 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
     :param dataset: str
         path to dataset file
     :param vocab_size: int or list
-         number of characters in words. Defaults to XXX.
+         number of characters in words. Defaults to 18000.
          This include all words with more than 1 appereance.
     :param minimum_len: None or int
         Sequences below this length are removed
@@ -1220,12 +1234,12 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
         seq_lens = train_mask.sum(axis=1)
         keep = seq_lens <= minimum_len
         print "Seqs above maximum   : %i" % np.invert(keep).sum()
-        train_X = train_X[-maximum_len:, :]
-        train_mask = train_mask[-maximum_len:, :]
-        train_X_unsup = train_X_unsup[-maximum_len:, :]
-        train_mask_unsup = train_mask_unsup[-maximum_len:, :]
-        test_X = test_X[-maximum_len:, :]
-        test_mask = test_mask[-maximum_len:, :]
+        train_X = slice_masked_seq(train_X, train_mask, maximum_len)
+        train_mask = slice_masked_seq(train_mask, train_mask, maximum_len)
+        train_X_unsup = slice_masked_seq(train_X_unsup, train_mask_unsup, maximum_len)
+        train_mask_unsup = slice_masked_seq(train_mask_unsup, train_mask_unsup, maximum_len)
+        test_X = slice_masked_seq(test_X, test_mask, maximum_len)
+        test_mask = slice_masked_seq(test_mask, test_mask, maximum_len)
 
     np.random.seed(seed)
     p = np.random.permutation(train_X.shape[0])
