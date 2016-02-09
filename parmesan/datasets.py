@@ -96,12 +96,6 @@ def _download_norb_small(dataset):
         cPkl.dump([train_x, train_t, test_x, test_t],f,protocol=cPkl.HIGHEST_PROTOCOL)
 
 
-def _download_rotten_tomatoes(dataset):
-    origin = ('http://www.cs.cornell.edu/people/pabo/movie-review-data/rt-polaritydata.tar.gz')
-    print 'Downloading data from %s' % origin
-    urllib.urlretrieve(origin, dataset + '/rt-polaritydata.tar.gz')
-
-
 def load_norb_small(dataset=_get_datafolder_path()+'/norb_small/norbsmall32x32.cpkl', dequantify=True, normalize=True ):
     '''
     Loads the real valued MNIST dataset
@@ -621,8 +615,55 @@ def load_rcv1(dataset=_get_datafolder_path()+'/rcv1/',max_features=10000,normali
 
     return x_train.astype('float32'), y_train.astype('float32'), x_test.astype('float32'), y_test.astype('float32')
 
+def _read_rotten_tomatoes(dataset):
+    try:
+        import pandas as pd
+    except:
+        raise ImportError('Pandas is required')
 
-def load_rotten_tomatoes(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
+    datasetfolder = os.path.dirname(dataset)
+
+    if not os.path.exists(datasetfolder):
+        os.makedirs(datasetfolder)
+
+    fn_pos = dataset + '/rt-polaritydata/rt-polarity.pos'
+    fn_neg = dataset + '/rt-polaritydata/rt-polarity.neg'
+    if not os.path.isfile(dataset + '/rt-polaritydata.tar.gz'):
+        origin = ('http://www.cs.cornell.edu/people/pabo/movie-review-data/rt-polaritydata.tar.gz')
+        print 'Downloading data from %s' % origin
+        urllib.urlretrieve(origin, dataset + '/rt-polaritydata.tar.gz')
+
+    with tarfile.open(dataset + '/rt-polaritydata.tar.gz', "r:gz") as tar:
+        tar.extractall(path=dataset)
+
+    # load review data
+    pos = pd.read_csv(
+        fn_pos, delimiter="\t", quoting=3, header=None)
+    neg = pd.read_csv(
+        fn_neg, header=None, delimiter="\t", quoting=3)
+    pos.columns = ["review"]
+    neg.columns = ["review"]
+    return pos, neg
+
+def _create_matrix_rotten_tomatoes(reviews, y_cls, char2idx, max_len, unk_idx):
+    num_seqs = len(reviews)
+    X = np.zeros((num_seqs, max_len), dtype='int32') -1  # set all to -1
+    for row in range(num_seqs):
+        review = reviews[row]
+        for col in range(len(review)):
+            # try to look up key otherwise use unk_idx
+            if review[col] in char2idx:
+                char_idx = char2idx[review[col]]
+            else:
+                char_idx = unk_idx
+            X[row, col] = char_idx
+
+    mask = (X != -1).astype('float32')
+    X[X==-1] = 0
+    y = np.ones(num_seqs, dtype='int32')*y_cls
+    return X, y, mask
+
+def load_rotten_tomatoes_character(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
                          vocab_size=40, minimum_len=None, maximum_len=None,
                          seed=1234):
     """Loader for rotten tomatoes sentiment analysis dataset
@@ -648,32 +689,8 @@ def load_rotten_tomatoes(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
     the same encoding.
     """
     from collections import Counter
-    try:
-        import pandas as pd
-    except:
-        raise ImportError('Pandas is required')
 
-    datasetfolder = os.path.dirname(dataset)
-
-    if not os.path.exists(datasetfolder):
-        os.makedirs(datasetfolder)
-
-    fn_pos = dataset + '/rt-polaritydata/rt-polarity.pos'
-    fn_neg = dataset + '/rt-polaritydata/rt-polarity.neg'
-    if not os.path.isfile(dataset + '/rt-polaritydata.tar.gz'):
-        _download_rotten_tomatoes(dataset)
-
-    with tarfile.open(dataset + '/rt-polaritydata.tar.gz', "r:gz") as tar:
-        tar.extractall(path=dataset)
-
-    # load review data
-    pos = pd.read_csv(
-        fn_pos, delimiter="\t", quoting=3, header=None)
-    neg = pd.read_csv(
-        fn_neg, header=None, delimiter="\t", quoting=3)
-    pos.columns = ["review"]
-    neg.columns = ["review"]
-
+    pos, neg = _read_rotten_tomatoes(dataset)
     # helper clean function
     def clean(l):
         l = l.strip('\n')
@@ -711,26 +728,12 @@ def load_rotten_tomatoes(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
     max_len = max(map(len, pos_lst + neg_lst))
 
     # helper function for converting chars to matrix format
-    def create_matrix(reviews, y_cls):
-        num_seqs = len(reviews)
-        X = np.zeros((num_seqs, max_len), dtype='int32') -1  # set all to -1
-        for row in range(num_seqs):
-            review = reviews[row]
-            for col in range(len(review)):
-                # try to look up key otherwise use unk_idx
-                if review[col] in char2idx:
-                    char_idx = char2idx[review[col]]
-                else:
-                    char_idx = unk_idx
-                X[row, col] = char_idx
 
-        mask = (X != -1).astype('float32')
-        X[X==-1] = 0
-        y = np.ones(num_seqs, dtype='int32')*y_cls
-        return X, y, mask
 
-    X_pos, y_pos, mask_pos = create_matrix(pos_lst, 1)
-    X_neg, y_neg, mask_neg = create_matrix(neg_lst, 0)
+    X_pos, y_pos, mask_pos = _create_matrix_rotten_tomatoes(
+        pos_lst, 1, char2idx, max_len, unk_idx)
+    X_neg, y_neg, mask_neg = _create_matrix_rotten_tomatoes(
+        neg_lst, 0, char2idx, max_len, unk_idx)
     X = np.concatenate([X_pos, X_neg], axis=0)
     y = np.concatenate([y_pos, y_neg], axis=0)
     mask = np.concatenate([mask_pos, mask_neg])
@@ -777,7 +780,335 @@ def load_rotten_tomatoes(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
     return X, y, mask, vocab
 
 
+def load_rotten_tomatoes_words(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
+                         vocab_size=9986, minimum_len=None, maximum_len=None,
+                         seed=1234):
+    """Loader for rotten tomatoes sentiment analysis dataset
+
+    Loads dataset as words
+
+    :param dataset: str
+        path to dataset file
+    :param vocab_size: int or list
+         number of vocab_size in VOCAB. Defaults to the 9986 most frequent
+         words. Default is all words with freq above 1.
+    :param minimum_len: None or int
+        if None no filtering
+    :param maximum_len: None or int
+        if None no filtering
+    :param seed: int
+         random seed
+    :return: X, y, mask, vocab
+
+    Notes
+    -----
+    The vocab output can be used to encode several character dataset with
+    the same encoding.
+    """
+    from collections import Counter
+    import itertools
+    pos, neg = _read_rotten_tomatoes(dataset)
+    # helper clean function
+    def clean(l):
+        l = re.sub("[^a-zA-Z]", " ", l)
+        l = re.sub(' +',' ', l)
+        l = l.rstrip()
+        return l
+
+    pos_lst = [clean(l) for l in pos['review']]
+    neg_lst = [clean(l) for l in neg['review']]
+    all_lst = pos_lst + neg_lst
+    # count character counts and return the "character" most frequently
+    # used vocab_size as list
+
+    if isinstance(vocab_size, int):
+        # join all data and split into a single large list of words
+        all_lst_split_chain = itertools.chain(*[l.split(" ") for l in all_lst])
+        words_counts = Counter(all_lst_split_chain)
+        words_counts_sorted = sorted(words_counts.items(), key=lambda x:x[1], reverse=True)
+
+        words, counts = zip(*words_counts_sorted[:vocab_size])
+
+        print "Using VOCAB with the %i most frequent characters" % vocab_size
+        print "-"*40
+        print "Top counts   "
+        print "-"*40
+        for w, c in zip(words[:10], counts[:10]):
+            print w, c
+        print "-"*40
+        print "bottom counts"
+        print "-"*40
+        for w, c in zip(words[-100:], counts[-100:]):
+            print w, c
+        print "-"*40
+        vocab = words[:vocab_size]
+        char2idx = {char: idx for idx, char in enumerate(vocab)}
+        unk_idx = max(char2idx.values()) + 1
+    else:
+        vocab = vocab_size
+        char2idx = {char:idx for idx, char in enumerate(vocab_size)}
+        unk_idx = max(char2idx.values()) + 1
+
+    # split into words
+    pos_lst_words = [l.split(' ') for l in pos_lst]
+    neg_lst_words = [l.split(' ') for l in neg_lst]
+
+    # find maximum sequence length
+    max_len = max(map(len, pos_lst_words + neg_lst_words))
+
+    # helper function for converting chars to matrix format
+
+
+    X_pos, y_pos, mask_pos = _create_matrix_rotten_tomatoes(
+        pos_lst_words, 1, char2idx, max_len, unk_idx)
+    X_neg, y_neg, mask_neg = _create_matrix_rotten_tomatoes(
+        neg_lst_words, 0, char2idx, max_len, unk_idx)
+    X = np.concatenate([X_pos, X_neg], axis=0)
+    y = np.concatenate([y_pos, y_neg], axis=0)
+    mask = np.concatenate([mask_pos, mask_neg])
+
+    print "-"*40
+    print "Minium length filter :", minimum_len
+    print "Maximum length filter:", maximum_len
+    if minimum_len is not None:
+        seq_lens = mask.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        print "Seqs below minimum   : %i" % np.invert(keep).sum()
+        X = X[keep, :]
+        y = y[keep]
+        mask = mask[keep, :]
+
+    if maximum_len is not None:
+        seq_lens = mask.sum(axis=1)
+        keep = seq_lens <= maximum_len
+        print "Seqs above maximum   : %i" % np.invert(keep).sum()
+        X = X[keep, :]
+        y = y[keep]
+        mask = mask[keep, :]
+
+    np.random.seed(seed)
+    p = np.random.permutation(X.shape[0])
+    X = X[p]
+    y = y[p]
+    mask = mask[p]
+
+    seq_lens = mask.sum(axis=1).astype('int32')
+    print "X                    :", X.shape, X.dtype
+    print "y                    :", y.shape, y.dtype
+    print "mask                 :", mask.shape, mask.dtype
+    print "MIN length           : ", seq_lens.min()
+    print "MAX length           : ", seq_lens.max()
+    print "MEAN length          : ", seq_lens.mean()
+    print "UNKOWN chars         : ", np.sum(X==unk_idx)
+    print "-"*40
+
+    # check that idx's in X is the number of vocab_size + unk_idx
+    return X, y, mask, vocab
+
+
+def load_imdb(dataset=_get_datafolder_path()+'/imdb_sentiment/',
+                         vocab_size=40, minimum_len=None, maximum_len=None,
+                         seed=1234):
+    """Loader for Imdb sentiment analysis dataset
+
+    Loads dataset as characters
+
+    :param dataset: str
+        path to dataset file
+    :param vocab_size: int or str
+         number of vocab_size in VOCAB. Defaults to the 40 most frequent
+         vocab_size if str uses str as vocab
+    :param minimum_len: None or int
+        if None no filtering
+    :param maximum_len: None or int
+        if None no filtering
+    :param seed: int
+         random seed
+    :return: X, y, mask, vocab
+
+    Notes
+    -----
+    The vocab output can be used to encode several character dataset with
+    the same encoding.
+    """
+    from collections import Counter
+    import glob
+    try:
+        import pandas as pd
+    except:
+        raise ImportError('Pandas is required')
+
+    datasetfolder = os.path.dirname(dataset)
+
+    if not os.path.exists(datasetfolder):
+        os.makedirs(datasetfolder)
+
+    #fn_pos = dataset + '/rt-polaritydata/rt-polarity.pos'
+    #fn_neg = dataset + '/rt-polaritydata/rt-polarity.neg'
+    if not os.path.isfile(dataset + '/aclImdb_v1.tar.gz'):
+            origin = ('http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz')
+            print 'Downloading data from %s' % origin
+            urllib.urlretrieve(origin, dataset + '/aclImdb_v1.tar.gz')
+
+
+
+    if not os.path.isdir(dataset + 'aclImdb'):
+        with tarfile.open(dataset + '/aclImdb_v1.tar.gz', "r:gz") as tar:
+            tar.extractall(path=dataset)
+
+    base_dir = dataset + 'aclImdb/'
+    train_pos = base_dir + "train/pos/*"
+    train_neg = base_dir + "train/neg/*"
+    train_unsup = base_dir + "train/unsup/*"
+    test_pos = base_dir + "test/pos/*"
+    test_neg = base_dir + "test/neg/*"
+
+    def clean(l):
+        l = l.rstrip('\n')
+        l = l.rstrip()
+        l = l.lower()
+        return l
+
+    def read_folder(folder):
+        files = glob.glob(folder)
+        output = []
+        for fn in files:
+            with open(fn, 'rb') as f:
+                output += [clean(f.readline())]
+        return output
+
+    train_pos_lst = read_folder(train_pos)
+    train_neg_lst = read_folder(train_neg)
+    train_unsup_lst = read_folder(train_unsup)
+    test_pos_lst = read_folder(test_pos)
+    test_neg_lst = read_folder(test_neg)
+
+    all_lst = train_pos_lst + train_neg_lst + test_pos_lst + \
+              test_neg_lst + train_unsup
+
+    # count character counts and return the "character" most frequently
+    # used vocab_size as list
+
+    if isinstance(vocab_size, int):
+        char_counts = Counter("".join(all_lst))
+        char_counts_sorted = sorted(
+            char_counts.items(), key=lambda x:x[1], reverse=True)
+
+        chars, counts = zip(*char_counts_sorted[:vocab_size])
+
+        print "Using VOCAB with the %i most frequent characters \n |%s|" % (
+            vocab_size, "".join(chars))
+        print "Character counts", ", ".join(map(str, counts))
+
+        vocab = sorted(chars)
+        char2idx = {char:idx for idx, char in enumerate(vocab)}
+        unk_idx = max(char2idx.values()) + 1
+    else:
+        vocab = vocab_size
+        print "Using VOCAB: |%s|" % vocab_size
+        char2idx = {char:idx for idx, char in enumerate(vocab_size)}
+        unk_idx = max(char2idx.values()) + 1
+
+    # find maximum sequence length
+    max_len = max(map(len, all_lst))
+
+    # helper function for converting chars to matrix format
+    def create_matrix(reviews, y_cls):
+        num_seqs = len(reviews)
+        X = np.zeros((num_seqs, max_len), dtype='int8') -1  # set all to -1
+        for row in range(num_seqs):
+            review = reviews[row]
+            for col in range(len(review)):
+                # try to look up key otherwise use unk_idx
+                if review[col] in char2idx:
+                    char_idx = char2idx[review[col]]
+                else:
+                    char_idx = unk_idx
+                X[row, col] = char_idx
+
+        mask = (X != -1).astype('float32')
+        X[X==-1] = 0
+        y = np.ones(num_seqs, dtype='int32')*y_cls
+        return X, y, mask
+
+    X_train_pos, y_train_pos, mask_train_pos = create_matrix(train_pos_lst, 1)
+    X_train_neg, y_train_neg, mask_train_neg = create_matrix(train_neg_lst, 0)
+    X_train_unsup, _, mask_train_unsup = create_matrix(train_unsup_lst)
+    X_train = np.concatenate([X_train_pos, X_train_neg], axis=0)
+    y_train = np.concatenate([y_train_pos, y_train_neg], axis=0)
+    mask_train = np.concatenate([mask_train_pos, mask_train_neg])
+
+    X_test_pos, y_test_pos, mask_test_pos = create_matrix(test_pos_lst, 1)
+    X_test_neg, y_test_neg, mask_test_neg = create_matrix(test_neg_lst, 0)
+    X_test = np.concatenate([X_test_pos, X_test_neg], axis=0)
+    y_test = np.concatenate([y_test_pos, y_test_neg], axis=0)
+    mask_test = np.concatenate([mask_test_pos, mask_test_neg])
+
+    print "-"*40
+    print "Minium length filter :", minimum_len
+    print "Maximum length filter:", maximum_len
+    if minimum_len is not None:
+        seq_lens = mask_train.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        print "Seqs below minimum   : %i" % np.invert(keep).sum()
+        X_train = X_train[keep, :]
+        y_train = y_train[keep]
+        mask_train = mask_train[keep, :]
+
+        seq_lens = mask_train_unsup.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        X_train_unsup = X_train_unsup[keep, :]
+
+    if maximum_len is not None:
+        seq_lens = mask_train.sum(axis=1)
+        keep = seq_lens <= maximum_len
+        print "Seqs above maximum   : %i" % np.invert(keep).sum()
+        X_train = X_train[keep, :]
+        y_train = y_train[keep]
+        mask_train = mask_train[keep, :]
+
+        seq_lens = mask_train_unsup.sum(axis=1)
+        keep = seq_lens <= minimum_len
+        X_train_unsup = X_train_unsup[keep, :]
+
+    np.random.seed(seed)
+    p = np.random.permutation(X_train.shape[0])
+    X_train = X_train[p]
+    y_train = y_train[p]
+    mask_train = mask_train[p]
+
+    p = np.random.permutation(X_train.shape[0])
+    X_train_unsup  = X_train_unsup[p]
+    mask_train_unsup = mask_train_unsup[p]
+
+    seq_lens = mask_train.sum(axis=1).astype('int32')
+    print "train X              :", X_train.shape, X_train.dtype
+    print "train y              :", y_train.shape, y_train.dtype
+    print "train mask           :", mask_train.shape, mask_train.dtype
+    print "train X unsup        :", X_train_unsup.shape, X_train_unsup.dtype
+    print "train mask unsup     :", mask_train_unsup.shape, mask_train_unsup.dtype
+    print "test X               :", X_test.shape, X_test.dtype
+    print "test y               :", y_test.shape, y_test.dtype
+    print "test mask            :", mask_train.shape, mask_train.dtype
+    print "MIN length           : ", seq_lens.min()
+    print "MAX length           : ", seq_lens.max()
+    print "MEAN length          : ", seq_lens.mean()
+    print "UNKOWN chars         : ", np.sum(X_train==unk_idx)
+    print "-"*40
+
+    # check that idx's in X is the number of vocab_size + unk_idx
+    n = vocab_size if isinstance(vocab_size, int) else len(vocab_size)
+    assert len(np.unique(X_train)) == n  + 1
+    assert sum(np.unique(y_train)) == 1 # check that y is 0,1
+    return X_train, y_train, mask_train, \
+           X_train_unsup, mask_train_unsup, \
+           X_test, y_test, mask_test, vocab
+
 def _one_hot(x,n_labels=None):
     if n_labels == None:
         n_labels = np.max(x)
     return np.eye(n_labels)[x]
+
+
+if __name__ == '__main__':
+    load_rotten_tomatoes_words()
