@@ -669,9 +669,9 @@ def slice_masked_seq(x, mask, max_len):
     for row in range(num_seqs):
         seq_len = np.sum(mask[row])
         if seq_len <= max_len:
-            output[row] = x[row]
+            output[row] = x[row,:max_len]
         else: # longer need slicing
-            output[row] = x[:, -max_len:]
+            output[row] = x[row, -max_len:]
     return output
 
 
