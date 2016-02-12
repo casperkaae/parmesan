@@ -966,7 +966,10 @@ def read_imdb(dataset):
     def clean(l):
         #l = re.sub("[^a-zA-Z\], " ", l)
         l = strip_tags(l)
-        for c in '.,:;-!#%&()=?*+[]$@"':
+        for c in '"`'+"'":
+            l = l.replace(c, '')
+
+        for c in '"#%&()*+-./:;<>=?@[]^_{}|~,\\':
             l = l.replace(c, " "+c+" ")
         l = re.sub(' +',' ', l)
         l = l.rstrip()
