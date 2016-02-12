@@ -1110,8 +1110,8 @@ def load_imdb_character(dataset=_get_datafolder_path()+'/imdb_sentiment/',
            X_test, y_test, mask_test, vocab
 
 def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
-                         vocab_size=18000, minimum_len=None, maximum_len=500,
-                         seed=1234):
+                         vocab_size='once', minimum_len=None, maximum_len=500,
+                         seed=1234, nbins=10):
     """Loader for Imdb sentiment analysis dataset
 
     Loads dataset as words
@@ -1148,14 +1148,19 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
               test_neg_lst + train_unsup_lst
 
 
-    if isinstance(vocab_size, int):
+    if isinstance(vocab_size, (int, str)):
         # join all data and split into a single large list of words
         all_lst_split_chain = itertools.chain(*[l.split(" ") for l in all_lst])
         words_counts = Counter(all_lst_split_chain)
         words_counts_sorted = sorted(
             words_counts.items(), key=lambda x:x[1], reverse=True)
 
-        words, counts = zip(*words_counts_sorted[:vocab_size])
+        words, counts = zip(*words_counts_sorted)
+
+        if vocab_size == 'once':
+            vocab_size = np.sum(np.array(counts) > 1)
+        words = words[:vocab_size]
+        counts = counts[:vocab_size]
 
         print "Using VOCAB with the %i most frequent words" % vocab_size
         print "-"*40
@@ -1188,9 +1193,11 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
     test_neg_lst_words = [l.split(' ') for l in test_neg_lst]
 
     # find maximum sequence length
-    max_len = max(
-        map(len, train_pos_lst_words + train_neg_lst_words +
-            train_unsup_lst_words + test_pos_lst_words + test_neg_lst_words))
+    seq_lens = map(len, train_pos_lst_words + train_neg_lst_words +
+            train_unsup_lst_words + test_pos_lst_words + test_neg_lst_words)
+    max_len = max(seq_lens)
+
+
 
     # helper function for converting chars to matrix format
 
@@ -1213,6 +1220,33 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
     test_X = np.concatenate([test_X_pos, test_X_neg], axis=0)
     test_y = np.concatenate([test_y_pos, test_y_neg], axis=0)
     test_mask = np.concatenate([test_mask_pos, test_mask_neg])
+
+
+    seq_lens_train = np.sum(train_mask, axis=1)
+    seq_arg = np.argsort(seq_lens_train)
+    train_X = train_X[seq_arg]
+    train_y = train_y[seq_arg]
+    train_mask = train_mask[seq_arg]
+
+    ns = train_X.shape[0]
+    bin_size = ns // nbins + 1
+
+    X_bins, y_bins, mask_bins = {}, {}, {}
+    for b in range(nbins):
+        bin_mask = train_mask[b*bin_size:(b+1)*bin_size]
+        bin_max_len = int(np.sum(bin_mask, axis=1).max())
+        X_bins[b] = train_X[b*bin_size:(b+1)*bin_size, :bin_max_len]
+        y_bins[b] = train_y[b*bin_size:(b+1)*bin_size]
+        mask_bins[b] = train_mask[b*bin_size:(b+1)*bin_size, :bin_max_len]
+        print b, bin_max_len, b*bin_size, (b+1)*bin_size
+
+    # helper function to return binned data
+    def create_train_batch(batch_size):
+        bin = np.random.randint(0,nbins)
+        Xb, yb, maskb = X_bins[bin], y_bins[bin], mask_bins[bin]
+        idx = np.random.choice(Xb.shape[0], size=batch_size,replace=False)
+        return Xb[idx], yb[idx], maskb[idx]
+
 
     print "-"*40
     print "Minium length filter :", minimum_len
@@ -1264,7 +1298,8 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
 
     # check that idx's in X is the number of vocab_size + unk_idx
     return train_X, train_y, train_mask, train_X_unsup, train_mask_unsup, \
-           test_X, test_y, test_mask, vocab
+           test_X, test_y, test_mask, vocab, create_train_batch
+
 
 
 
