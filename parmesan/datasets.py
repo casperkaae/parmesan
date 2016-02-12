@@ -947,6 +947,8 @@ def read_imdb(dataset):
 
     def clean(l):
         #l = re.sub("[^a-zA-Z\], " ", l)
+        for c in ".,:;-!#%&()=?*+[]$":
+            l = l.replace(c, " "+c)
         l = re.sub(' +',' ', l)
         l = l.rstrip()
         l = l.lower()
