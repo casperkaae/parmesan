@@ -919,6 +919,24 @@ def load_rotten_tomatoes_words(dataset=_get_datafolder_path()+'/rotten_tomatoes/
 
 
 def read_imdb(dataset):
+    from HTMLParser import HTMLParser
+
+    class MLStripper(HTMLParser):
+        def __init__(self):
+            self.reset()
+            self.fed = []
+        def handle_data(self, d):
+            self.fed.append(d)
+        def get_data(self):
+            return ''.join(self.fed)
+
+    def strip_tags(html):
+        s = MLStripper()
+        s.feed(html)
+        return s.get_data()
+
+
+
     import glob
     datasetfolder = os.path.dirname(dataset)
 
@@ -947,6 +965,7 @@ def read_imdb(dataset):
 
     def clean(l):
         #l = re.sub("[^a-zA-Z\], " ", l)
+        l = strip_tags(l)
         for c in '.,:;-!#%&()=?*+[]$@"':
             l = l.replace(c, " "+c+" ")
         l = re.sub(' +',' ', l)
@@ -969,6 +988,7 @@ def read_imdb(dataset):
     test_neg_lst = read_folder(test_neg)
     return train_pos_lst, train_neg_lst, train_unsup_lst, \
            test_pos_lst, test_neg_lst
+
 
 
 def load_imdb_character(dataset=_get_datafolder_path()+'/imdb_sentiment/',
