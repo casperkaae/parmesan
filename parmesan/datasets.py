@@ -946,7 +946,7 @@ def read_imdb(dataset):
     test_neg = base_dir + "test/neg/*"
 
     def clean(l):
-        l = re.sub("[^a-zA-Z]", " ", l)
+        #l = re.sub("[^a-zA-Z\], " ", l)
         l = re.sub(' +',' ', l)
         l = l.rstrip()
         l = l.lower()
