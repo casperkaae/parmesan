@@ -963,13 +963,20 @@ def read_imdb(dataset):
     test_pos = base_dir + "test/pos/*"
     test_neg = base_dir + "test/neg/*"
 
+    regexp = re.compile(r'[^\x00-\x7F]+')
     def clean(l):
+
         #l = re.sub("[^a-zA-Z\], " ", l)
+
+
         l = strip_tags(l)
+        l = re.sub(regexp,' ', l)
+        #l = "".join(i for i in l if ord(i)<128) # remove non-ascii
         for c in '"`'+"'":
             l = l.replace(c, '')
-
-        for c in '"#%&()*+-./:;<>=?@[]^_{}|~,\\':
+        l = l.replace(unichr(163), '')
+        l = l.replace("\t", '')
+        for c in '$!"#%&()*+-./:;<>=?@[]^_{}|~,\\':
             l = l.replace(c, " "+c+" ")
         l = re.sub(' +',' ', l)
         l = l.rstrip()
@@ -979,7 +986,9 @@ def read_imdb(dataset):
     def read_folder(folder):
         files = glob.glob(folder)
         output = []
-        for fn in files:
+        for idx, fn in enumerate(files):
+            if (idx+1) % 5000 == 0:
+                print idx, "of", len(files)
             with open(fn, 'rb') as f:
                 output += [clean(f.readline())]
         return output
