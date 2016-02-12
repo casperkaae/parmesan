@@ -1110,7 +1110,7 @@ def load_imdb_character(dataset=_get_datafolder_path()+'/imdb_sentiment/',
            X_test, y_test, mask_test, vocab
 
 def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
-                         vocab_size='once', minimum_len=None, maximum_len=500,
+                         vocab_size='once', minimum_len=None, maximum_len=None,
                          seed=1234, nbins=10):
     """Loader for Imdb sentiment analysis dataset
 
