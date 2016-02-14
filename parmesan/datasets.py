@@ -1275,11 +1275,18 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
         print b, bin_max_len, b*bin_size, (b+1)*bin_size
 
     # helper function to return binned data
-    def create_train_batch(batch_size):
+    def create_train_batch(batch_size, max_len=None):
         bin = np.random.randint(0,nbins)
         Xb, yb, maskb = X_bins[bin], y_bins[bin], mask_bins[bin]
         idx = np.random.choice(Xb.shape[0], size=batch_size,replace=False)
-        return Xb[idx], yb[idx], maskb[idx]
+        _mask = maskb[idx]
+        _X = Xb[idx]
+        _y = yb[idx]
+        if max_len is not None:
+            _X = slice_masked_seq(_X, _mask, max_len)
+            _mask = slice_masked_seq(_mask, _mask, max_len)
+
+        return _X, _y, _mask
 
 
     print "-"*40
