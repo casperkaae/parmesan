@@ -220,7 +220,7 @@ h5, z5, z_noise5, norm_list5 = create_encoder(
     h4, num_units=250, nonlinearity=unit, layer_num=5)
 
 h6, z6, z_noise6, norm_list6 = create_encoder(
-    h4, num_units=10, nonlinearity=softmax, layer_num=6)
+    h5, num_units=10, nonlinearity=softmax, layer_num=6)
 
 l_out_enc = h6
 
