@@ -664,15 +664,25 @@ def _create_matrix(reviews, y_cls, char2idx, max_len, unk_idx):
     return X, y, mask
 
 def slice_masked_seq(x, mask, max_len):
-    num_seqs = x.shape[0]
-    output = np.zeros((num_seqs, max_len), dtype=x.dtype)
-    for row in range(num_seqs):
-        seq_len = np.sum(mask[row])
-        if seq_len <= max_len:
-            output[row] = x[row,:max_len]
-        else: # longer need slicing
-            output[row] = x[row, -max_len:]
-    return output
+    """
+    Slices a sequence such that the last part is kept if the sequence is longer
+    than max_len.
+
+    Usefull if one assumes that the end of a seuqence is more informative then
+    the end.
+    """
+    if x.shape[1] <= max_len:
+        num_seqs = x.shape[0]
+        output = np.zeros((num_seqs, max_len), dtype=x.dtype)
+        for row in range(num_seqs):
+            seq_len = np.sum(mask[row])
+            if seq_len <= max_len:
+                output[row] = x[row,:max_len]
+            else: # longer need slicing
+                output[row] = x[row, -max_len:]
+        return output
+    else:
+        return x
 
 
 def load_rotten_tomatoes_character(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
