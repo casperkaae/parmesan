@@ -670,8 +670,10 @@ def slice_masked_seq(x, mask, max_len):
 
     Usefull if one assumes that the end of a seuqence is more informative then
     the end.
+
+    if x is shorter than max_len we return x
     """
-    if x.shape[1] <= max_len:
+    if x.shape[1] >= max_len:
         num_seqs = x.shape[0]
         output = np.zeros((num_seqs, max_len), dtype=x.dtype)
         for row in range(num_seqs):
