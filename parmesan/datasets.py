@@ -1,23 +1,8 @@
 import numpy as np
 import pickle as pkl
 import cPickle as cPkl
-
-from scipy.io import loadmat
-import gzip, tarfile, zipfile
-import tarfile
-import fnmatch
-import os, shutil
-import urllib
-from scipy.io import loadmat
-from sklearn.datasets import fetch_lfw_people
-from scipy.misc import imread,imresize
-from sklearn.datasets import fetch_20newsgroups, fetch_rcv1
-from sklearn.feature_extraction.text import CountVectorizer
-from nltk.stem import WordNetLemmatizer
-from nltk.stem.porter import PorterStemmer as EnglishStemmer
-from nltk.tokenize import wordpunct_tokenize as wordpunct_tokenize
-import re
-import string
+import gzip, zipfile, tarfile
+import os, shutil, re, string, urllib, fnmatch
 
 def _get_datafolder_path():
     full_path = os.path.abspath('.')
@@ -36,6 +21,7 @@ def _download_frey_faces(dataset):
     Download the MNIST dataset if it is not present.
     :return: The train, test and validation set.
     """
+    from scipy.io import loadmat
     origin = (
         'http://www.cs.nyu.edu/~roweis/data/frey_rawface.mat'
     )
@@ -64,7 +50,8 @@ def _download_omniglot_iwae(dataset):
     :return: The train, test and validation set.
     """
     origin = (
-        'https://github.com/yburda/iwae/raw/master/datasets/OMNIGLOT/chardata.mat'
+        'https://github.com/yburda/iwae/raw/'
+        'master/datasets/OMNIGLOT/chardata.mat'
     )
     print 'Downloading data from %s' % origin
     urllib.urlretrieve(origin, dataset + '/chardata.mat')
@@ -74,35 +61,51 @@ def _download_norb_small(dataset):
     """
     Download the Norb dataset
     """
-
+    from scipy.io import loadmat
     print 'Downloading small resized norb data'
-    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x46789x9x18x6x2x32x32-training-dat-matlab-bicubic.mat', dataset + '/smallnorb_train_x.mat')
-    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x46789x9x18x6x2x96x96-training-cat-matlab.mat', dataset + '/smallnorb_train_t.mat')
 
-    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x01235x9x18x6x2x32x32-testing-dat-matlab-bicubic.mat', dataset + '/smallnorb_test_x.mat')
-    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x01235x9x18x6x2x96x96-testing-cat-matlab.mat', dataset + '/smallnorb_test_t.mat')
+    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-'
+                       '5x46789x9x18x6x2x32x32-training-dat-matlab-bicubic.mat',
+                       dataset + '/smallnorb_train_x.mat')
+    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-'
+                       '5x46789x9x18x6x2x96x96-training-cat-matlab.mat',
+                       dataset + '/smallnorb_train_t.mat')
 
+    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-'
+                       '5x01235x9x18x6x2x32x32-testing-dat-matlab-bicubic.mat',
+                       dataset + '/smallnorb_test_x.mat')
+    urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-'
+                       '5x01235x9x18x6x2x96x96-testing-cat-matlab.mat',
+                       dataset + '/smallnorb_test_t.mat')
 
     data = loadmat(dataset + '/smallnorb_train_x.mat')['traindata']
     train_x = np.concatenate([data[:,0,:].T, data[:,0,:].T]).astype('float32')
-    train_t = loadmat(dataset + '/smallnorb_train_t.mat')['trainlabels'].flatten().astype('float32')
+    data = loadmat(dataset + '/smallnorb_train_t.mat')
+    train_t = data['trainlabels'].flatten().astype('float32')
     train_t = np.concatenate([train_t, train_t])
 
     data = loadmat(dataset + '/smallnorb_test_x.mat')['testdata']
     test_x = np.concatenate([data[:,0,:].T, data[:,0,:].T]).astype('float32')
-    test_t = loadmat(dataset + '/smallnorb_test_t.mat')['testlabels'].flatten().astype('float32')
+    data = loadmat(dataset + '/smallnorb_test_t.mat')
+    test_t = data['testlabels'].flatten().astype('float32')
     test_t = np.concatenate([test_t, test_t])
     with open(dataset+'/norbsmall32x32.cpkl','w') as f:
-        cPkl.dump([train_x, train_t, test_x, test_t],f,protocol=cPkl.HIGHEST_PROTOCOL)
+        cPkl.dump([train_x, train_t, test_x, test_t], f,
+                  protocol=cPkl.HIGHEST_PROTOCOL)
 
 
 def _download_rotten_tomatoes(dataset):
-    origin = ('http://www.cs.cornell.edu/people/pabo/movie-review-data/rt-polaritydata.tar.gz')
+    origin = ('http://www.cs.cornell.edu/people/pabo/'
+              'movie-review-data/rt-polaritydata.tar.gz')
+
     print 'Downloading data from %s' % origin
     urllib.urlretrieve(origin, dataset + '/rt-polaritydata.tar.gz')
 
 
-def load_norb_small(dataset=_get_datafolder_path()+'/norb_small/norbsmall32x32.cpkl', dequantify=True, normalize=True ):
+def load_norb_small(
+        dataset=_get_datafolder_path()+'/norb_small/norbsmall32x32.cpkl',
+        dequantify=True,
+        normalize=True ):
     '''
     Loads the real valued MNIST dataset
     :param dataset: path to dataset file
@@ -118,8 +121,8 @@ def load_norb_small(dataset=_get_datafolder_path()+'/norb_small/norbsmall32x32.c
         train_x, train_t, test_x, test_t = cPkl.load(f)
 
     if dequantify:
-        train_x = train_x + np.random.uniform(0,1,size=train_x.shape).astype('float32')
-        test_x = test_x + np.random.uniform(0,1,size=test_x.shape).astype('float32')
+        train_x += np.random.uniform(0,1,size=train_x.shape).astype('float32')
+        test_x += np.random.uniform(0,1,size=test_x.shape).astype('float32')
     if normalize:
         train_x = train_x / 256.
         test_x = test_x / 256.
@@ -132,12 +135,14 @@ def _download_omniglot(dataset):
     Download the omniglot dataset if it is not present.
     :return: The train, test and validation set.
     """
-
+    from scipy.misc import imread,imresize
     origin_eval = (
-        "https://github.com/brendenlake/omniglot/raw/master/python/images_evaluation.zip"
+        "https://github.com/brendenlake/omniglot/"
+        "raw/master/python/images_evaluation.zip"
     )
     origin_back = (
-        "https://github.com/brendenlake/omniglot/raw/master/python/images_background.zip"
+        "https://github.com/brendenlake/omniglot/"
+        "raw/master/python/images_background.zip"
     )
     print 'Downloading data from %s' % origin_eval
     urllib.urlretrieve(origin_eval, dataset + '/images_evaluation.zip')
@@ -185,13 +190,15 @@ def _download_omniglot(dataset):
 
 
 def _download_lwf(dataset,size):
+    from sklearn.datasets import fetch_lfw_people
     '''
     :param dataset:
     :return:
     '''
     lfw_people = fetch_lfw_people(color=True,resize=size)
     f = gzip.open(dataset, 'w')
-    cPkl.dump([lfw_people.images.astype('uint8'),lfw_people.target],f,protocol=cPkl.HIGHEST_PROTOCOL)
+    cPkl.dump([lfw_people.images.astype('uint8'),lfw_people.target], f,
+              protocol=cPkl.HIGHEST_PROTOCOL)
     f.close()
 
 
@@ -201,9 +208,12 @@ def _download_mnist_binarized(datapath):
     :return: The train, test and validation set.
     """
     datafiles = {
-        "train": "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_train.amat",
-        "valid": "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_valid.amat",
-        "test": "http://www.cs.toronto.edu/~larocheh/public/datasets/binarized_mnist/binarized_mnist_test.amat"
+        "train": "http://www.cs.toronto.edu/~larocheh/public/"
+                 "datasets/binarized_mnist/binarized_mnist_train.amat",
+        "valid": "http://www.cs.toronto.edu/~larocheh/public/datasets/"
+                 "binarized_mnist/binarized_mnist_valid.amat",
+        "test": "http://www.cs.toronto.edu/~larocheh/public/datasets/"
+                "binarized_mnist/binarized_mnist_test.amat"
     }
     datasplits = {}
     for split in datafiles.keys():
@@ -241,6 +251,7 @@ def load_omniglot_iwae(dataset=_get_datafolder_path()+'/omniglot_iwae'):
     :param dataset: path to dataset file
     :return: None
     '''
+    from scipy.io import loadmat
     if not os.path.exists(dataset):
         os.makedirs(dataset)
         _download_omniglot_iwae(dataset)
@@ -258,7 +269,8 @@ def load_omniglot_iwae(dataset=_get_datafolder_path()+'/omniglot_iwae'):
     return train_x, train_t, train_char, test_x, test_t, test_char
 
 
-def load_mnist_realval(dataset=_get_datafolder_path()+'/mnist_real/mnist.pkl.gz'):
+def load_mnist_realval(
+        dataset=_get_datafolder_path()+'/mnist_real/mnist.pkl.gz'):
     '''
     Loads the real valued MNIST dataset
     :param dataset: path to dataset file
@@ -279,7 +291,8 @@ def load_mnist_realval(dataset=_get_datafolder_path()+'/mnist_real/mnist.pkl.gz'
     return x_train, targets_train, x_valid, targets_valid, x_test, targets_test
 
 
-def load_mnist_binarized(dataset=_get_datafolder_path()+'/mnist_binarized/mnist.pkl.gz'):
+def load_mnist_binarized(
+        dataset=_get_datafolder_path()+'/mnist_binarized/mnist.pkl.gz'):
     '''
     Loads the fixed binarized MNIST dataset provided by Hugo Larochelle.
     :param dataset: path to dataset file
@@ -301,6 +314,7 @@ def _download_rcv1():
     Download the rcv1 dataset from scikitlearn.
     :return: The train, test and validation set.
     """
+    from sklearn.datasets import fetch_rcv1
     print "downloading rcv1 train data...."
     newsgroups_train = fetch_rcv1(subset='train')
     print "downloading rcv1 test data...."
@@ -316,10 +330,13 @@ def _download_20newsgroup():
     Download the 20 newsgroups dataset from scikitlearn.
     :return: The train, test and validation set.
     """
+    from sklearn.datasets import fetch_20newsgroups
     print "downloading 20 newsgroup train data...."
-    newsgroups_train = fetch_20newsgroups(subset='train', remove=('headers', 'footers', 'quotes'))
+    newsgroups_train = fetch_20newsgroups(
+        subset='train', remove=('headers', 'footers', 'quotes'))
     print "downloading 20 newsgroup test data...."
-    newsgroups_test = fetch_20newsgroups(subset='test', remove=('headers', 'footers', 'quotes'))
+    newsgroups_test = fetch_20newsgroups(
+        subset='test', remove=('headers', 'footers', 'quotes'))
     train_set = (newsgroups_train.data, newsgroups_train.target)
     test_set = (newsgroups_test.data, newsgroups_test.target)
 
@@ -329,6 +346,11 @@ def _bow(train, test, max_features=1000):
     '''
     bag-of-words encoding helper function
     '''
+    from sklearn.feature_extraction.text import CountVectorizer
+    from nltk.stem import WordNetLemmatizer
+    from nltk.stem.porter import PorterStemmer as EnglishStemmer
+    from nltk.tokenize import wordpunct_tokenize as wordpunct_tokenize
+
     x_train, y_train = train
     x_test, y_test = test
 
@@ -336,19 +358,25 @@ def _bow(train, test, max_features=1000):
     stemmer = EnglishStemmer()
     lemmatizer = WordNetLemmatizer()
     for i in range(len(x_train)):
-        x_train[i] = " ".join([lemmatizer.lemmatize(stemmer.stem(token.lower())) for token in wordpunct_tokenize(
+        x_train[i] = " ".join([lemmatizer.lemmatize(stemmer.stem(token.lower()))
+                               for token in wordpunct_tokenize(
             re.sub('[%s]' % re.escape(string.punctuation), '', x_train[i]))])
 
-    vectorizer_train = CountVectorizer(strip_accents='ascii', stop_words='english',
-                                 token_pattern=r"(?u)\b\w[a-z]\w+[a-z]\b", max_features=max_features,
-                                 vocabulary=None, dtype='float32')
+    vectorizer_train = CountVectorizer(strip_accents='ascii',
+                                       stop_words='english',
+                                       token_pattern=r"(?u)\b\w[a-z]\w+[a-z]\b",
+                                       max_features=max_features,
+                                       vocabulary=None, dtype='float32')
     x_train = vectorizer_train.fit_transform(x_train).toarray()
 
 
     vocab_train = vectorizer_train.get_feature_names()
-    vectorizer_test = CountVectorizer(strip_accents='ascii', stop_words='english',
-                                 token_pattern=r"(?u)\b\w[a-z]\w+[a-z]\b", max_features=max_features,
-                                 vocabulary=vocab_train, dtype='float32')
+    vectorizer_test = CountVectorizer(strip_accents='ascii',
+                                      stop_words='english',
+                                      token_pattern=r"(?u)\b\w[a-z]\w+[a-z]\b",
+                                      max_features=max_features,
+                                      vocabulary=vocab_train,
+                                      dtype='float32')
     x_test = vectorizer_test.fit_transform(x_test).toarray()
 
     # remove documents with no words
@@ -374,13 +402,17 @@ def _download_cifar10(dataset):
     urllib.urlretrieve(origin, dataset)
 
 
-def load_cifar10(dataset=_get_datafolder_path()+'/cifar10/cifar-10-python.tar.gz', normalize=True, dequantify=True):
+def load_cifar10(
+        dataset=_get_datafolder_path()+'/cifar10/cifar-10-python.tar.gz',
+        normalize=True,
+        dequantify=True):
     '''
     Loads the cifar10 dataset
     :param dataset: path to dataset file
     :param normalize: normalize the x data to the range [0,1]
     :param dequantify: Add uniform noise to dequantify the data following
-        Uria et. al 2013 "RNADE: The real-valued neural autoregressive density-estimator"
+        Uria et. al 2013
+        "RNADE: The real-valued neural autoregressive density-estimator"
     :return: train and test data
     '''
     datasetfolder = os.path.dirname(dataset)
@@ -390,7 +422,7 @@ def load_cifar10(dataset=_get_datafolder_path()+'/cifar10/cifar-10-python.tar.gz
             os.makedirs(datasetfolder)
         _download_cifar10(dataset)
 
-    if not os.path.isfile(batch_folder + 'data_batch_5'):  #check if a file in the dataset is extracted
+    if not os.path.isfile(batch_folder + 'data_batch_5'):
         with tarfile.open(dataset) as tar:
             tar.extractall(os.path.dirname(dataset))
 
@@ -411,24 +443,28 @@ def load_cifar10(dataset=_get_datafolder_path()+'/cifar10/cifar-10-python.tar.gz
 
 
     if dequantify:
-        train_x = train_x + np.random.uniform(0,1,size=train_x.shape).astype('float32')
-        test_x = test_x + np.random.uniform(0,1,size=test_x.shape).astype('float32')
+        train_x += np.random.uniform(0,1,size=train_x.shape).astype('float32')
+        test_x += np.random.uniform(0,1,size=test_x.shape).astype('float32')
     if normalize:
         train_x = train_x / 256.
         test_x = test_x / 256.
 
-    train_x = train_x.reshape((50000, 3, 32, 32)).transpose(0, 2, 3, 1).astype('float32')
-    test_x = test_x.reshape((10000, 3, 32, 32)).transpose(0, 2, 3, 1).astype('float32')
+    train_x = train_x.reshape((50000, 3, 32, 32)).transpose(0, 2, 3, 1)
+    test_x = test_x.reshape((10000, 3, 32, 32)).transpose(0, 2, 3, 1)
 
-    return train_x, train_y, test_x, test_y
+    return train_x.astype('float32'), train_y, test_x.astype('float32'), test_y
 
 
-def load_frey_faces(dataset=_get_datafolder_path()+'/frey_faces/frey_faces', normalize=True, dequantify=True):
+def load_frey_faces(
+        dataset=_get_datafolder_path()+'/frey_faces/frey_faces',
+        normalize=True,
+        dequantify=True):
     '''
     :param dataset:
     :param normalize:
     :param dequantify: Add uniform noise to dequantify the data following
-        Uria et. al 2013 "RNADE: The real-valued neural autoregressive density-estimator"
+        Uria et. al 2013
+        "RNADE: The real-valued neural autoregressive density-estimator"
     :return:
     '''
     datasetfolder = os.path.dirname(dataset+'.pkl.gz')
@@ -452,12 +488,17 @@ def load_frey_faces(dataset=_get_datafolder_path()+'/frey_faces/frey_faces', nor
         data = data / 256.
     return data
 
-def load_lfw(dataset=_get_datafolder_path()+'/lfw/lfw', normalize=True, dequantify=True, size=0.25):
+def load_lfw(
+        dataset=_get_datafolder_path()+'/lfw/lfw',
+        normalize=True,
+        dequantify=True,
+        size=0.25):
     '''
     :param dataset:
     :param normalize:
     :param dequantify: Add uniform noise to dequantify the data following
-        Uria et. al 2013 "RNADE: The real-valued neural autoregressive density-estimator"
+        Uria et. al 2013
+        "RNADE: The real-valued neural autoregressive density-estimator"
     :param size: rescaling factor
     :return:
     '''
@@ -486,12 +527,17 @@ def load_lfw(dataset=_get_datafolder_path()+'/lfw/lfw', normalize=True, dequanti
     return data
 
 
-def load_svhn(dataset=_get_datafolder_path()+'/svhn/', normalize=True, dequantify=True, extra=False):
+def load_svhn(
+        dataset=_get_datafolder_path()+'/svhn/',
+        normalize=True,
+        dequantify=True,
+        extra=False):
     '''
     :param dataset:
     :param normalize:
     :param dequantify: Add uniform noise to dequantify the data following
-        Uria et. al 2013 "RNADE: The real-valued neural autoregressive density-estimator"
+        Uria et. al 2013
+        "RNADE: The real-valued neural autoregressive density-estimator"
     :param extra: include extra svhn samples
     :return:
     '''
@@ -518,8 +564,8 @@ def load_svhn(dataset=_get_datafolder_path()+'/svhn/', normalize=True, dequantif
     test_y = test_y.astype('int32')
 
     if dequantify:
-        train_x = train_x + np.random.uniform(0,1,size=train_x.shape).astype('float32')
-        test_x = test_x + np.random.uniform(0,1,size=test_x.shape).astype('float32')
+        train_x += np.random.uniform(0,1,size=train_x.shape).astype('float32')
+        test_x += np.random.uniform(0,1,size=test_x.shape).astype('float32')
 
     if normalize:
         train_x = train_x / 256.
@@ -531,14 +577,21 @@ def load_svhn(dataset=_get_datafolder_path()+'/svhn/', normalize=True, dequantif
 
 def _download_svhn(dataset):
     """
+    Download the SVHN dataset
     """
-    print 'Downloading data from http://ufldl.stanford.edu/housenumbers/, this may take a while...'
+    from scipy.io import loadmat
+
+    print 'Downloading data from http://ufldl.stanford.edu/housenumbers/, ' \
+          'this may take a while...'
     print "Downloading train data..."
-    urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/train_32x32.mat', dataset+'train_32x32.mat')
+    urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/train_32x32.mat',
+                       dataset+'train_32x32.mat')
     print "Downloading test data..."
-    urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/test_32x32.mat', dataset+'test_32x32.mat')
+    urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/test_32x32.mat',
+                       dataset+'test_32x32.mat')
     print "Downloading extra data..."
-    urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/extra_32x32.mat', dataset+'extra_32x32.mat')
+    urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/extra_32x32.mat',
+                       dataset+'extra_32x32.mat')
 
     train = loadmat(dataset+'train_32x32.mat')
     train_x = train['X'].swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
@@ -558,11 +611,16 @@ def _download_svhn(dataset):
     print "Saving extra data"
     with open(dataset +'svhn_extra.cpkl', 'w') as f:
         pkl.dump([extra_x,extra_y],f,protocol=cPkl.HIGHEST_PROTOCOL)
-    os.remove(dataset+'train_32x32.mat'),os.remove(dataset+'test_32x32.mat'),os.remove(dataset+'extra_32x32.mat')
+    os.remove(dataset+'train_32x32.mat')
+    os.remove(dataset+'test_32x32.mat')
+    os.remove(dataset+'extra_32x32.mat')
 
 
 
-def load_20newsgroup(dataset=_get_datafolder_path()+'/20newsgroup/',max_features=1000,normalize_by_doc_len=True):
+def load_20newsgroup(
+        dataset=_get_datafolder_path()+'/20newsgroup/',
+        max_feat=1000,
+        normalize_by_doc_len=True):
     '''
     Loads 20 newsgroup dataset
     :param dataset: path to dataset file
@@ -573,13 +631,14 @@ def load_20newsgroup(dataset=_get_datafolder_path()+'/20newsgroup/',max_features
     if not os.path.exists(datasetfolder):
         os.makedirs(datasetfolder)
 
-    if not os.path.isfile(dataset + '20newsgroup_mf'+ str(max_features) + '.pkl'):
+    if not os.path.isfile(dataset + '20newsgroup_mf'+ str(max_feat) + '.pkl'):
         train_set,test_set = _download_20newsgroup()
-        train_set, test_set, vocab_train = _bow(train_set, test_set, max_features=max_features)
-        with open(dataset + '20newsgroup_mf'+ str(max_features) + '.pkl','w') as f:
+        train_set, test_set, vocab_train \
+            = _bow(train_set, test_set, max_features=max_feat)
+        with open(dataset + '20newsgroup_mf'+ str(max_feat) + '.pkl','w') as f:
             pkl.dump([train_set, test_set, vocab_train],f)
 
-    with open(dataset + '20newsgroup_mf'+ str(max_features) + '.pkl','r') as f:
+    with open(dataset + '20newsgroup_mf'+ str(max_feat) + '.pkl','r') as f:
         train_set, test_set, vocab_train = pkl.load(f)
 
     x_train, y_train = train_set
@@ -589,10 +648,16 @@ def load_20newsgroup(dataset=_get_datafolder_path()+'/20newsgroup/',max_features
         x_train = x_train / (x_train).sum(keepdims=True, axis=1)
         x_test = x_test / (x_test).sum(keepdims=True, axis=1)
 
-    return x_train.astype('float32'), y_train.astype('float32'), x_test.astype('float32'), y_test.astype('float32')
+    return x_train.astype('float32'), \
+           y_train.astype('float32'), \
+           x_test.astype('float32'), \
+           y_test.astype('float32')
 
 
-def load_rcv1(dataset=_get_datafolder_path()+'/rcv1/',max_features=10000,normalize_by_doc_len=True):
+def load_rcv1(
+        dataset=_get_datafolder_path()+'/rcv1/',
+        max_features=10000,
+        normalize_by_doc_len=True):
     '''
     Loads 20 newsgroup dataset
     :param dataset: path to dataset file
@@ -605,7 +670,8 @@ def load_rcv1(dataset=_get_datafolder_path()+'/rcv1/',max_features=10000,normali
 
     if not os.path.isfile(dataset + 'rcv1_mf'+ str(max_features) + '.cpkl'):
         train_set,test_set = _download_rcv1()
-        train_set, test_set, vocab_train = _bow(train_set, test_set, max_features=max_features)
+        train_set, test_set, vocab_train = \
+            _bow(train_set, test_set, max_features=max_features)
         with open(dataset + 'rcv1_mf'+ str(max_features) + '.cpkl','w') as f:
             cPkl.dump([train_set, test_set, vocab_train],f)
 
@@ -619,7 +685,10 @@ def load_rcv1(dataset=_get_datafolder_path()+'/rcv1/',max_features=10000,normali
         x_train = x_train / (x_train).sum(keepdims=True, axis=1)
         x_test = x_test / (x_test).sum(keepdims=True, axis=1)
 
-    return x_train.astype('float32'), y_train.astype('float32'), x_test.astype('float32'), y_test.astype('float32')
+    return x_train.astype('float32'), \
+           y_train.astype('float32'), \
+           x_test.astype('float32'), \
+           y_test.astype('float32')
 
 
 def load_rotten_tomatoes(dataset=_get_datafolder_path()+'/rotten_tomatoes/',

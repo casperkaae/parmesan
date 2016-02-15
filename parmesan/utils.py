@@ -53,7 +53,7 @@ class ConfusionMatrix:
 
         return "".join(s_out)
 
-    def batchadd(self, y_true, y_pred):
+    def batchadd(self, y_pred, y_true):
         assert y_true.shape == y_pred.shape
         assert len(y_true) == len(y_pred)
         assert max(y_true) < self.n_classes
