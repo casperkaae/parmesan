@@ -1278,12 +1278,25 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
     bin_size = ns // nbins + 1
 
     X_bins, y_bins, mask_bins = {}, {}, {}
+    max_lens = []
     for b in range(nbins):
         bin_mask = train_mask[b*bin_size:(b+1)*bin_size]
         bin_max_len = int(np.sum(bin_mask, axis=1).max())
         X_bins[b] = train_X[b*bin_size:(b+1)*bin_size, :bin_max_len]
         y_bins[b] = train_y[b*bin_size:(b+1)*bin_size]
         mask_bins[b] = train_mask[b*bin_size:(b+1)*bin_size, :bin_max_len]
+        max_lens += [bin_max_len]
+        print b, bin_max_len, b*bin_size, (b+1)*bin_size
+
+
+    X_unsup_bins, mask_unsup_bins = {}, {}
+    for b, bin_max_len in enumerate(max_lens):
+        bin_mask = train_mask_unsup[b*bin_size:(b+1)*bin_size]
+        X_unsup_bins[b] = slice_masked_seq(train_X[b*bin_size:(b+1)*bin_size], bin_mask)
+        mask_unsup_bins[b] = slice_masked_seq(bin_mask[b*bin_size:(b+1)*bin_size], bin_mask)
+
+        X_unsup_bins[b] = X_unsup_bins[b][:,:bin_max_len]
+        mask_unsup_bins[b] = mask_unsup_bins[b][:, :bin_max_len]
         print b, bin_max_len, b*bin_size, (b+1)*bin_size
 
     # helper function to return binned data
@@ -1294,11 +1307,21 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
         _mask = maskb[idx]
         _X = Xb[idx]
         _y = yb[idx]
+
+        Xbu, maskbu = X_unsup_bins[bin], mask_bins[bin]
+        idx = np.random.choice(Xbu.shape[0], size=batch_size,replace=False)
+        _Xu = Xbu[idx]
+        _masku = maskbu[idx]
+
+
         if max_len is not None:
             _X = slice_masked_seq(_X, _mask, max_len)
             _mask = slice_masked_seq(_mask, _mask, max_len)
 
-        return _X, _y, _mask
+            _Xu = slice_masked_seq(_Xu, _masku, max_len)
+            _masku = slice_masked_seq(_masku, _masku, max_len)
+
+        return _X, _y, _mask, _Xu, _masku
 
 
     print "-"*40
