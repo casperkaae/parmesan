@@ -16,11 +16,11 @@ class SimpleSampleLayer(lasagne.layers.MergeLayer):
         same number of dimensions.
 
     seed : int
-        random seed to random stream
+        seed to random stream
 
     Methods
     ----------
-    seed : Helper function to change the random seed for a trained model
+    seed : Helper function to change the random seed after init is called
 
     References
     ----------
@@ -84,11 +84,11 @@ class SampleLayer(lasagne.layers.MergeLayer):
         f(x) = T.exp(0.5*x) such that T.exp(0.5*log(sigma^2)) = sigma
 
     seed : int
-        random seed to random stream
+        seed to random stream
 
     Methods
     ----------
-    seed : Helper function to change the random seed for a trained model
+    seed : Helper function to change the random seed after init is called
 
     References
     ----------
