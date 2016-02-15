@@ -1,23 +1,8 @@
 import numpy as np
 import pickle as pkl
 import cPickle as cPkl
-
-from scipy.io import loadmat
-import gzip, tarfile, zipfile
-import tarfile
-import fnmatch
-import os, shutil
-import urllib
-from scipy.io import loadmat
-from sklearn.datasets import fetch_lfw_people
-from scipy.misc import imread,imresize
-from sklearn.datasets import fetch_20newsgroups, fetch_rcv1
-from sklearn.feature_extraction.text import CountVectorizer
-from nltk.stem import WordNetLemmatizer
-from nltk.stem.porter import PorterStemmer as EnglishStemmer
-from nltk.tokenize import wordpunct_tokenize as wordpunct_tokenize
-import re
-import string
+import gzip, zipfile, tarfile
+import os, shutil, re, string, urllib, fnmatch
 
 def _get_datafolder_path():
     full_path = os.path.abspath('.')
@@ -36,6 +21,7 @@ def _download_frey_faces(dataset):
     Download the MNIST dataset if it is not present.
     :return: The train, test and validation set.
     """
+    from scipy.io import loadmat
     origin = (
         'http://www.cs.nyu.edu/~roweis/data/frey_rawface.mat'
     )
@@ -74,14 +60,13 @@ def _download_norb_small(dataset):
     """
     Download the Norb dataset
     """
-
+    from scipy.io import loadmat
     print 'Downloading small resized norb data'
     urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x46789x9x18x6x2x32x32-training-dat-matlab-bicubic.mat', dataset + '/smallnorb_train_x.mat')
     urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x46789x9x18x6x2x96x96-training-cat-matlab.mat', dataset + '/smallnorb_train_t.mat')
 
     urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x01235x9x18x6x2x32x32-testing-dat-matlab-bicubic.mat', dataset + '/smallnorb_test_x.mat')
     urllib.urlretrieve('http://dl.dropbox.com/u/13294233/smallnorb/smallnorb-5x01235x9x18x6x2x96x96-testing-cat-matlab.mat', dataset + '/smallnorb_test_t.mat')
-
 
     data = loadmat(dataset + '/smallnorb_train_x.mat')['traindata']
     train_x = np.concatenate([data[:,0,:].T, data[:,0,:].T]).astype('float32')
@@ -132,7 +117,7 @@ def _download_omniglot(dataset):
     Download the omniglot dataset if it is not present.
     :return: The train, test and validation set.
     """
-
+    from scipy.misc import imread,imresize
     origin_eval = (
         "https://github.com/brendenlake/omniglot/raw/master/python/images_evaluation.zip"
     )
@@ -185,6 +170,7 @@ def _download_omniglot(dataset):
 
 
 def _download_lwf(dataset,size):
+    from sklearn.datasets import fetch_lfw_people
     '''
     :param dataset:
     :return:
@@ -241,6 +227,7 @@ def load_omniglot_iwae(dataset=_get_datafolder_path()+'/omniglot_iwae'):
     :param dataset: path to dataset file
     :return: None
     '''
+    from scipy.io import loadmat
     if not os.path.exists(dataset):
         os.makedirs(dataset)
         _download_omniglot_iwae(dataset)
@@ -301,6 +288,7 @@ def _download_rcv1():
     Download the rcv1 dataset from scikitlearn.
     :return: The train, test and validation set.
     """
+    from sklearn.datasets import fetch_rcv1
     print "downloading rcv1 train data...."
     newsgroups_train = fetch_rcv1(subset='train')
     print "downloading rcv1 test data...."
@@ -316,6 +304,7 @@ def _download_20newsgroup():
     Download the 20 newsgroups dataset from scikitlearn.
     :return: The train, test and validation set.
     """
+    from sklearn.datasets import fetch_20newsgroups
     print "downloading 20 newsgroup train data...."
     newsgroups_train = fetch_20newsgroups(subset='train', remove=('headers', 'footers', 'quotes'))
     print "downloading 20 newsgroup test data...."
@@ -329,6 +318,11 @@ def _bow(train, test, max_features=1000):
     '''
     bag-of-words encoding helper function
     '''
+    from sklearn.feature_extraction.text import CountVectorizer
+    from nltk.stem import WordNetLemmatizer
+    from nltk.stem.porter import PorterStemmer as EnglishStemmer
+    from nltk.tokenize import wordpunct_tokenize as wordpunct_tokenize
+
     x_train, y_train = train
     x_test, y_test = test
 
@@ -531,7 +525,10 @@ def load_svhn(dataset=_get_datafolder_path()+'/svhn/', normalize=True, dequantif
 
 def _download_svhn(dataset):
     """
+    Download the SVHN dataset
     """
+    from scipy.io import loadmat
+
     print 'Downloading data from http://ufldl.stanford.edu/housenumbers/, this may take a while...'
     print "Downloading train data..."
     urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/train_32x32.mat', dataset+'train_32x32.mat')

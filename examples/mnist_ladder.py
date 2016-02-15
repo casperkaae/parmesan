@@ -367,7 +367,7 @@ def train_epoch_semisupervised(x):
         net_out = net_out[:num_labels]
 
         preds = np.argmax(net_out, axis=-1)
-        confusion_train.batchadd(targets_train_lab, preds)
+        confusion_train.batchadd(preds, targets_train_lab)
         losses += [batch_loss]
     return confusion_train, losses, layer_costs
 
@@ -377,7 +377,7 @@ def test_epoch(x, y):
     _ = f_collect(x_train)
     net_out = f_clean(x)
     preds = np.argmax(net_out, axis=-1)
-    confusion_valid.batchadd(y, preds)
+    confusion_valid.batchadd(preds, y)
     return confusion_valid
 
 with open(output_file, 'a') as f:
