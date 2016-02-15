@@ -21,11 +21,13 @@ class SimpleSampleLayer(lasagne.layers.MergeLayer):
             "Auto-Encoding Variational Bayes."
             arXiv preprint arXiv:1312.6114 (2013).
     """
-    def __init__(self, mean, log_var, **kwargs):
+    def __init__(self, mean, log_var,
+                 seed=lasagne.random.get_rng().randint(1, 2147462579),
+                 **kwargs):
         super(SimpleSampleLayer, self).__init__([mean, log_var], **kwargs)
 
-        self._srng = RandomStreams(
-            lasagne.random.get_rng().randint(1, 2147462579))
+        self._srng = RandomStreams(seed)
+
 
     def get_output_shape_for(self, input_shapes):
         return input_shapes[0]
@@ -79,16 +81,19 @@ class SampleLayer(lasagne.layers.MergeLayer):
             arXiv preprint arXiv:1509.00519 (2015).
     """
 
-    def __init__(self, mean, log_var, eq_samples=1, iw_samples=1,
-                 nonlinearity=lambda x: T.exp(0.5*x),  **kwargs):
+    def __init__(self, mean, log_var,
+                 eq_samples=1,
+                 iw_samples=1,
+                 nonlinearity=lambda x: T.exp(0.5*x),
+                 seed=lasagne.random.get_rng().randint(1, 2147462579),
+                  **kwargs):
         super(SampleLayer, self).__init__([mean, log_var], **kwargs)
 
         self.eq_samples = eq_samples
         self.iw_samples = iw_samples
         self.nonlinearity = nonlinearity
 
-        self._srng = RandomStreams(
-            lasagne.random.get_rng().randint(1, 2147462579))
+        self._srng = RandomStreams(seed)
 
     def get_output_shape_for(self, input_shapes):
         batch_size, num_latent = input_shapes[0]
