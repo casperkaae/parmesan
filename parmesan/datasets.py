@@ -1267,7 +1267,39 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
     test_y = np.concatenate([test_y_pos, test_y_neg], axis=0)
     test_mask = np.concatenate([test_mask_pos, test_mask_neg])
 
+    #################
+    # Do filtering
+    #################
+    print "-"*40
+    print "Minium length filter :", minimum_len
+    print "Maximum length filter:", maximum_len
+    if minimum_len is not None:
+        seq_lens = train_mask.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        print "Seqs below minimum   : %i" % np.invert(keep).sum()
+        train_X = train_X[keep, :]
+        train_y = train_y[keep]
+        train_mask = train_mask[keep, :]
 
+        seq_lens = train_mask.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        train_X_unsup = train_X_unsup[:keep]
+        train_mask_unsup = train_mask_unsup[:keep]
+
+    if maximum_len is not None:
+        seq_lens = train_mask.sum(axis=1)
+        keep = seq_lens <= minimum_len
+        print "Seqs above maximum   : %i" % np.invert(keep).sum()
+        train_X = slice_masked_seq(train_X, train_mask, maximum_len)
+        train_mask = slice_masked_seq(train_mask, train_mask, maximum_len)
+        train_X_unsup = slice_masked_seq(train_X_unsup, train_mask_unsup, maximum_len)
+        train_mask_unsup = slice_masked_seq(train_mask_unsup, train_mask_unsup, maximum_len)
+        test_X = slice_masked_seq(test_X, test_mask, maximum_len)
+        test_mask = slice_masked_seq(test_mask, test_mask, maximum_len)
+
+    ################################################
+    # Build helper functions for returning batches
+    ################################################
     seq_lens_train = np.sum(train_mask, axis=1)
     seq_arg = np.argsort(seq_lens_train)
     train_X = train_X[seq_arg]
@@ -1304,53 +1336,26 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
         bin = np.random.randint(0,nbins)
         Xb, yb, maskb = X_bins[bin], y_bins[bin], mask_bins[bin]
         idx = np.random.choice(Xb.shape[0], size=batch_size,replace=False)
-        _mask = maskb[idx]
-        _X = Xb[idx]
-        _y = yb[idx]
+        _mask_lab = maskb[idx]
+        _X_lab = Xb[idx]
+        _y_lab = yb[idx]
 
         Xbu, maskbu = X_unsup_bins[bin], mask_bins[bin]
         idx = np.random.choice(Xbu.shape[0], size=batch_size,replace=False)
-        _Xu = Xbu[idx]
-        _masku = maskbu[idx]
+        _X_unlab = Xbu[idx]
+        _mask_uunlab = maskbu[idx]
 
 
         if max_len is not None:
-            _X = slice_masked_seq(_X, _mask, max_len)
-            _mask = slice_masked_seq(_mask, _mask, max_len)
+            _X_lab = slice_masked_seq(_X_lab, _mask_lab, max_len)
+            _mask_lab = slice_masked_seq(_mask_lab, _mask_lab, max_len)
 
-            _Xu = slice_masked_seq(_Xu, _masku, max_len)
-            _masku = slice_masked_seq(_masku, _masku, max_len)
+            _X_unlab = slice_masked_seq(_X_unlab, _mask_uunlab, max_len)
+            _mask_uunlab = slice_masked_seq(_mask_uunlab, _mask_uunlab, max_len)
 
-        return _X, _y, _mask, _Xu, _masku
+        return _X_lab, _y_lab, _mask_lab, _X_unlab, _mask_uunlab
 
-
-    print "-"*40
-    print "Minium length filter :", minimum_len
-    print "Maximum length filter:", maximum_len
-    if minimum_len is not None:
-        seq_lens = train_mask.sum(axis=1)
-        keep = seq_lens >= minimum_len
-        print "Seqs below minimum   : %i" % np.invert(keep).sum()
-        train_X = train_X[keep, :]
-        train_y = train_y[keep]
-        train_mask = train_mask[keep, :]
-
-        seq_lens = train_mask.sum(axis=1)
-        keep = seq_lens >= minimum_len
-        train_X_unsup = train_X_unsup[:keep]
-        train_mask_unsup = train_mask_unsup[:keep]
-
-    if maximum_len is not None:
-        seq_lens = train_mask.sum(axis=1)
-        keep = seq_lens <= minimum_len
-        print "Seqs above maximum   : %i" % np.invert(keep).sum()
-        train_X = slice_masked_seq(train_X, train_mask, maximum_len)
-        train_mask = slice_masked_seq(train_mask, train_mask, maximum_len)
-        train_X_unsup = slice_masked_seq(train_X_unsup, train_mask_unsup, maximum_len)
-        train_mask_unsup = slice_masked_seq(train_mask_unsup, train_mask_unsup, maximum_len)
-        test_X = slice_masked_seq(test_X, test_mask, maximum_len)
-        test_mask = slice_masked_seq(test_mask, test_mask, maximum_len)
-
+    
     np.random.seed(seed)
     p = np.random.permutation(train_X.shape[0])
     train_X = train_X[p]
