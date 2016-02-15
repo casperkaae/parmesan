@@ -1324,8 +1324,8 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
     X_unsup_bins, mask_unsup_bins = {}, {}
     for b, bin_max_len in enumerate(max_lens):
         bin_mask = train_mask_unsup[b*bin_size:(b+1)*bin_size]
-        X_unsup_bins[b] = slice_masked_seq(train_X[b*bin_size:(b+1)*bin_size], bin_mask)
-        mask_unsup_bins[b] = slice_masked_seq(bin_mask[b*bin_size:(b+1)*bin_size], bin_mask)
+        X_unsup_bins[b] = train_X[b*bin_size:(b+1)*bin_size]
+        mask_unsup_bins[b] = bin_mask[b*bin_size:(b+1)*bin_size]
 
         X_unsup_bins[b] = X_unsup_bins[b][:,:bin_max_len]
         mask_unsup_bins[b] = mask_unsup_bins[b][:, :bin_max_len]
@@ -1355,7 +1355,7 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
 
         return _X_lab, _y_lab, _mask_lab, _X_unlab, _mask_uunlab
 
-    
+
     np.random.seed(seed)
     p = np.random.permutation(train_X.shape[0])
     train_X = train_X[p]
