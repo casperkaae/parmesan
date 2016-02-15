@@ -15,6 +15,13 @@ class SimpleSampleLayer(lasagne.layers.MergeLayer):
         from as described in [KINGMA]_. The code assumes that these have the
         same number of dimensions.
 
+    seed : int
+        random seed to random stream
+
+    Methods
+    ----------
+    seed : Helper function to change the random seed for a trained model
+
     References
     ----------
         ..  [KINGMA] Kingma, Diederik P., and Max Welling.
@@ -28,6 +35,8 @@ class SimpleSampleLayer(lasagne.layers.MergeLayer):
 
         self._srng = RandomStreams(seed)
 
+    def seed(self, seed=lasagne.random.get_rng().randint(1, 2147462579)):
+       self._srng.seed(seed)
 
     def get_output_shape_for(self, input_shapes):
         return input_shapes[0]
@@ -74,6 +83,13 @@ class SampleLayer(lasagne.layers.MergeLayer):
         log_var = log(sigma^2) and hence the corresponding nonlinearity is
         f(x) = T.exp(0.5*x) such that T.exp(0.5*log(sigma^2)) = sigma
 
+    seed : int
+        random seed to random stream
+
+    Methods
+    ----------
+    seed : Helper function to change the random seed for a trained model
+
     References
     ----------
         ..  [BURDA] Burda, Yuri, Roger Grosse, and Ruslan Salakhutdinov.
@@ -94,6 +110,9 @@ class SampleLayer(lasagne.layers.MergeLayer):
         self.nonlinearity = nonlinearity
 
         self._srng = RandomStreams(seed)
+
+    def seed(self, seed=lasagne.random.get_rng().randint(1, 2147462579)):
+        self._srng.seed(seed)
 
     def get_output_shape_for(self, input_shapes):
         batch_size, num_latent = input_shapes[0]
