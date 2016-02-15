@@ -93,7 +93,7 @@ def log_multinomial(x, p):
     """
     Compute log pdf of multinomial distribution
 
-        .. math:: \log p(x; p) = \log \sum_x p(x) \log q(x)
+        .. math:: \log p(x; p) = \sum_x p(x) \log q(x)
 
     where p is the true class probability and q is the predicted class
     probability.
