@@ -497,7 +497,8 @@ def load_lfw(
     :param dataset:
     :param normalize:
     :param dequantify: Add uniform noise to dequantify the data following
-        Uria et. al 2013 "RNADE: The real-valued neural autoregressive density-estimator"
+        Uria et. al 2013
+        "RNADE: The real-valued neural autoregressive density-estimator"
     :param size: rescaling factor
     :return:
     '''
@@ -535,7 +536,8 @@ def load_svhn(
     :param dataset:
     :param normalize:
     :param dequantify: Add uniform noise to dequantify the data following
-        Uria et. al 2013 "RNADE: The real-valued neural autoregressive density-estimator"
+        Uria et. al 2013
+        "RNADE: The real-valued neural autoregressive density-estimator"
     :param extra: include extra svhn samples
     :return:
     '''
