@@ -645,9 +645,9 @@ def _read_rotten_tomatoes(dataset):
     neg.columns = ["review"]
     return pos, neg
 
-def _create_matrix(reviews, y_cls, char2idx, max_len, unk_idx):
+def _create_matrix(reviews, y_cls, char2idx, max_len, unk_idx, dtype='32'):
     num_seqs = len(reviews)
-    X = np.zeros((num_seqs, max_len), dtype='int32') -1  # set all to -1
+    X = np.zeros((num_seqs, max_len), dtype='int'+dtype) -1  # set all to -1
     for row in range(num_seqs):
         review = reviews[row]
         for col in range(len(review)):
@@ -658,9 +658,9 @@ def _create_matrix(reviews, y_cls, char2idx, max_len, unk_idx):
                 char_idx = unk_idx
             X[row, col] = char_idx
 
-    mask = (X != -1).astype('float32')
+    mask = (X != -1).astype('float'+dtype)
     X[X==-1] = 0
-    y = np.ones(num_seqs, dtype='int32')*y_cls
+    y = np.ones(num_seqs, dtype='int'+dtype)*y_cls
     return X, y, mask
 
 def slice_masked_seq(x, mask, max_len):
@@ -930,7 +930,7 @@ def load_rotten_tomatoes_words(dataset=_get_datafolder_path()+'/rotten_tomatoes/
     return X, y, mask, vocab
 
 
-def read_imdb(dataset):
+def read_imdb(dataset, clean):
     from HTMLParser import HTMLParser
 
     class MLStripper(HTMLParser):
@@ -946,9 +946,6 @@ def read_imdb(dataset):
         s = MLStripper()
         s.feed(html)
         return s.get_data()
-
-
-
     import glob
     datasetfolder = os.path.dirname(dataset)
 
@@ -975,25 +972,6 @@ def read_imdb(dataset):
     test_pos = base_dir + "test/pos/*"
     test_neg = base_dir + "test/neg/*"
 
-    regexp = re.compile(r'[^\x00-\x7F]+')
-    def clean(l):
-
-        #l = re.sub("[^a-zA-Z\], " ", l)
-
-
-        l = strip_tags(l)
-        l = re.sub(regexp,' ', l)
-        #l = "".join(i for i in l if ord(i)<128) # remove non-ascii
-        for c in '"`'+"'":
-            l = l.replace(c, '')
-        l = l.replace(unichr(163), '')
-        l = l.replace("\t", '')
-        for c in '$!"#%&()*+-./:;<>=?@[]^_{}|~,\\':
-            l = l.replace(c, " "+c+" ")
-        l = re.sub(' +',' ', l)
-        l = l.rstrip()
-        l = l.lower()
-        return l
 
     def read_folder(folder):
         files = glob.glob(folder)
@@ -1002,7 +980,7 @@ def read_imdb(dataset):
             if (idx+1) % 5000 == 0:
                 print idx, "of", len(files)
             with open(fn, 'rb') as f:
-                output += [clean(f.readline())]
+                output += [clean(strip_tags(f.readline()))]
         return output
 
     train_pos_lst = read_folder(train_pos)
@@ -1046,8 +1024,17 @@ def load_imdb_character(dataset=_get_datafolder_path()+'/imdb_sentiment/',
     except:
         raise ImportError('Pandas is required')
 
+    #regexp = re.compile(r'[^\x00-\x7F]+')
+    def clean(l):
+        l = re.sub(' +',' ', l)
+        l = l.rstrip()
+        l = l.lower()
+        return l
+
+
+
     train_pos_lst, train_neg_lst, train_unsup_lst, \
-           test_pos_lst, test_neg_lst = read_imdb(dataset)
+           test_pos_lst, test_neg_lst = read_imdb(dataset, clean)
 
     all_lst = train_pos_lst + train_neg_lst + test_pos_lst + \
               test_neg_lst + train_unsup_lst
@@ -1079,19 +1066,19 @@ def load_imdb_character(dataset=_get_datafolder_path()+'/imdb_sentiment/',
     max_len = max(map(len, all_lst))
 
     X_train_pos, y_train_pos, mask_train_pos = _create_matrix(
-        train_pos_lst, 1, char2idx, max_len, unk_idx)
+        train_pos_lst, 1, char2idx, max_len, unk_idx, dtype='8')
     X_train_neg, y_train_neg, mask_train_neg = _create_matrix(
-        train_neg_lst, 0, char2idx, max_len, unk_idx)
+        train_neg_lst, 0, char2idx, max_len, unk_idx, dtype='8')
     X_train_unsup, _, mask_train_unsup = _create_matrix(
-        train_unsup_lst, -1, )
+        train_unsup_lst, -1, char2idx, max_len, unk_idx, dtype='8')
     X_train = np.concatenate([X_train_pos, X_train_neg], axis=0)
     y_train = np.concatenate([y_train_pos, y_train_neg], axis=0)
     mask_train = np.concatenate([mask_train_pos, mask_train_neg])
 
     X_test_pos, y_test_pos, mask_test_pos = _create_matrix(
-        test_pos_lst, 1, char2idx, max_len, unk_idx)
+        test_pos_lst, 1, char2idx, max_len, unk_idx, dtype='8')
     X_test_neg, y_test_neg, mask_test_neg = _create_matrix(
-        test_neg_lst, 0, char2idx, max_len, unk_idx)
+        test_neg_lst, 0, char2idx, max_len, unk_idx, dtype='8')
     X_test = np.concatenate([X_test_pos, X_test_neg], axis=0)
     y_test = np.concatenate([y_test_pos, y_test_neg], axis=0)
     mask_test = np.concatenate([mask_test_pos, mask_test_neg])
@@ -1153,7 +1140,7 @@ def load_imdb_character(dataset=_get_datafolder_path()+'/imdb_sentiment/',
     assert sum(np.unique(y_train)) == 1 # check that y is 0,1
     return X_train, y_train, mask_train, \
            X_train_unsup, mask_train_unsup, \
-           X_test, y_test, mask_test, vocab
+           X_test, y_test, mask_test, vocab, char2idx
 
 def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
                          vocab_size='once', minimum_len=None, maximum_len=None,
@@ -1187,8 +1174,23 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
     except:
         raise ImportError('Pandas is required')
 
+    regexp = re.compile(r'[^\x00-\x7F]+')
+    def clean(l):
+        l = re.sub(regexp,' ', l)
+        #l = "".join(i for i in l if ord(i)<128) # remove non-ascii
+        l = l.replace(unichr(163), '')
+        l = l.replace("\t", '')
+        for c in '$!"#%&()*+-./:;<>=?@[]^_{}|~,\\'+'"`':
+            l = l.replace(c, " "+c+" ")
+        for i in "'":
+            l = l.replace(i, '')
+        l = re.sub(' +',' ', l)
+        l = l.rstrip()
+        l = l.lower()
+        return l
+
     train_pos_lst, train_neg_lst, train_unsup_lst, \
-           test_pos_lst, test_neg_lst = read_imdb(dataset)
+           test_pos_lst, test_neg_lst = read_imdb(dataset, clean)
 
     all_lst = train_pos_lst + train_neg_lst + test_pos_lst + \
               test_neg_lst + train_unsup_lst
@@ -1297,63 +1299,64 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
         test_X = slice_masked_seq(test_X, test_mask, maximum_len)
         test_mask = slice_masked_seq(test_mask, test_mask, maximum_len)
 
-    ################################################
-    # Build helper functions for returning batches
-    ################################################
-    seq_lens_train = np.sum(train_mask, axis=1)
-    seq_arg = np.argsort(seq_lens_train)
-    train_X = train_X[seq_arg]
-    train_y = train_y[seq_arg]
-    train_mask = train_mask[seq_arg]
-
-    ns = train_X.shape[0]
-    bin_size = ns // nbins + 1
-
-    X_bins, y_bins, mask_bins = {}, {}, {}
-    max_lens = []
-    for b in range(nbins):
-        bin_mask = train_mask[b*bin_size:(b+1)*bin_size]
-        bin_max_len = int(np.sum(bin_mask, axis=1).max())
-        X_bins[b] = train_X[b*bin_size:(b+1)*bin_size, :bin_max_len]
-        y_bins[b] = train_y[b*bin_size:(b+1)*bin_size]
-        mask_bins[b] = train_mask[b*bin_size:(b+1)*bin_size, :bin_max_len]
-        max_lens += [bin_max_len]
-        print b, bin_max_len, b*bin_size, (b+1)*bin_size
-
-
-    X_unsup_bins, mask_unsup_bins = {}, {}
-    for b, bin_max_len in enumerate(max_lens):
-        bin_mask = train_mask_unsup[b*bin_size:(b+1)*bin_size]
-        X_unsup_bins[b] = train_X[b*bin_size:(b+1)*bin_size]
-        mask_unsup_bins[b] = bin_mask[b*bin_size:(b+1)*bin_size]
-
-        X_unsup_bins[b] = X_unsup_bins[b][:,:bin_max_len]
-        mask_unsup_bins[b] = mask_unsup_bins[b][:, :bin_max_len]
-        print b, bin_max_len, b*bin_size, (b+1)*bin_size
-
-    # helper function to return binned data
-    def create_train_batch(batch_size, max_len=None):
-        bin = np.random.randint(0,nbins)
-        Xb, yb, maskb = X_bins[bin], y_bins[bin], mask_bins[bin]
-        idx = np.random.choice(Xb.shape[0], size=batch_size,replace=False)
-        _mask_lab = maskb[idx]
-        _X_lab = Xb[idx]
-        _y_lab = yb[idx]
-
-        Xbu, maskbu = X_unsup_bins[bin], mask_bins[bin]
-        idx = np.random.choice(Xbu.shape[0], size=batch_size,replace=False)
-        _X_unlab = Xbu[idx]
-        _mask_uunlab = maskbu[idx]
-
-
-        if max_len is not None:
-            _X_lab = slice_masked_seq(_X_lab, _mask_lab, max_len)
-            _mask_lab = slice_masked_seq(_mask_lab, _mask_lab, max_len)
-
-            _X_unlab = slice_masked_seq(_X_unlab, _mask_uunlab, max_len)
-            _mask_uunlab = slice_masked_seq(_mask_uunlab, _mask_uunlab, max_len)
-
-        return _X_lab, _y_lab, _mask_lab, _X_unlab, _mask_uunlab
+    # ################################################
+    # # Build helper functions for returning batches
+    # ################################################
+    # seq_lens_train = np.sum(train_mask, axis=1)
+    # seq_arg = np.argsort(seq_lens_train)
+    # train_X = train_X[seq_arg]
+    # train_y = train_y[seq_arg]
+    # train_mask = train_mask[seq_arg]
+    #
+    # ns = train_X.shape[0]
+    # bin_size = ns // nbins + 1
+    #
+    # X_bins, y_bins, mask_bins = {}, {}, {}
+    # max_lens = []
+    # for b in range(nbins):
+    #     bin_mask = train_mask[b*bin_size:(b+1)*bin_size]
+    #     bin_max_len = int(np.sum(bin_mask, axis=1).max())
+    #     X_bins[b] = train_X[b*bin_size:(b+1)*bin_size, :bin_max_len]
+    #     y_bins[b] = train_y[b*bin_size:(b+1)*bin_size]
+    #     mask_bins[b] = train_mask[b*bin_size:(b+1)*bin_size, :bin_max_len]
+    #     max_lens += [bin_max_len]
+    #     print b, bin_max_len, b*bin_size, (b+1)*bin_size
+    #
+    #
+    # X_unsup_bins, mask_unsup_bins = {}, {}
+    # for b, bin_max_len in enumerate(max_lens):
+    #     bin_mask = train_mask_unsup[b*bin_size:(b+1)*bin_size]
+    #     X_unsup_bins[b] = train_X[b*bin_size:(b+1)*bin_size]
+    #     mask_unsup_bins[b] = bin_mask[b*bin_size:(b+1)*bin_size]
+    #
+    #     X_unsup_bins[b] = X_unsup_bins[b][:,:bin_max_len]
+    #     mask_unsup_bins[b] = mask_unsup_bins[b][:, :bin_max_len]
+    #     print b, bin_max_len, b*bin_size, (b+1)*bin_size
+    #
+    # # helper function to return binned data
+    # def create_train_batch(batch_size, max_len=None):
+    #     assert False, "This is wrong because i return the valid set!"
+    #     bin = np.random.randint(0,nbins)
+    #     Xb, yb, maskb = X_bins[bin], y_bins[bin], mask_bins[bin]
+    #     idx = np.random.choice(Xb.shape[0], size=batch_size,replace=False)
+    #     _mask_lab = maskb[idx]
+    #     _X_lab = Xb[idx]
+    #     _y_lab = yb[idx]
+    #
+    #     Xbu, maskbu = X_unsup_bins[bin], mask_bins[bin]
+    #     idx = np.random.choice(Xbu.shape[0], size=batch_size,replace=False)
+    #     _X_unlab = Xbu[idx]
+    #     _mask_uunlab = maskbu[idx]
+    #
+    #
+    #     if max_len is not None:
+    #         _X_lab = slice_masked_seq(_X_lab, _mask_lab, max_len)
+    #         _mask_lab = slice_masked_seq(_mask_lab, _mask_lab, max_len)
+    #
+    #         _X_unlab = slice_masked_seq(_X_unlab, _mask_uunlab, max_len)
+    #         _mask_uunlab = slice_masked_seq(_mask_uunlab, _mask_uunlab, max_len)
+    #
+    #     return _X_lab, _y_lab, _mask_lab, _X_unlab, _mask_uunlab
 
 
     np.random.seed(seed)
@@ -1379,7 +1382,7 @@ def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
 
     # check that idx's in X is the number of vocab_size + unk_idx
     return train_X, train_y, train_mask, train_X_unsup, train_mask_unsup, \
-           test_X, test_y, test_mask, vocab, create_train_batch
+           test_X, test_y, test_mask, vocab
 
 
 
