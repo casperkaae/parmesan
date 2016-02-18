@@ -163,7 +163,7 @@ l_mu = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=l
 l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_LOG_VAR')
 
 #sample layer
-l_z = SampleLayer(mu=l_mu, log_var=l_log_var, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
+l_z = SampleLayer(mean=l_mu, log_var=l_log_var, eq_samples=sym_eq_samples, iw_samples=sym_iw_samples)
 
 # Generative model q(x|z)
 l_dec_h1 = denselayer(l_z, num_units=nhidden, name='DEC_DENSE2', nonlinearity=nonlin_dec)

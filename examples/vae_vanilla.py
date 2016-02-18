@@ -76,7 +76,7 @@ l_mu = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=l
 l_log_var = lasagne.layers.DenseLayer(l_enc_h1, num_units=latent_size, nonlinearity=lasagne.nonlinearities.identity, name='ENC_Z_LOG_VAR')
 
 #sample the latent variables using mu(x) and log(sigma^2(x))
-l_z = SimpleSampleLayer(mu=l_mu, log_var=l_log_var)
+l_z = SimpleSampleLayer(mean=l_mu, log_var=l_log_var)
 
 ### GENERATIVE MODEL p(x|z)
 l_dec_h1 = lasagne.layers.DenseLayer(l_z, num_units=nhidden, nonlinearity=nonlin_dec, name='DEC_DENSE2')
