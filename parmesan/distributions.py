@@ -23,7 +23,7 @@ def log_normal(x, mean, sd):
     Theano tensor
         Element-wise log probability, this has to be summed for multi-variate distributions.
     """
-    return c - T.log(T.abs_(sd)) - (x - mean)**2 / (2 * sd**2)
+    return c - T.log(T.abs_(sd)) - (x - mean)**2 / (2 * sd**2 + 1e-8)
 
 
 def log_normal2(x, mean, log_var):
@@ -47,7 +47,7 @@ def log_normal2(x, mean, log_var):
     Theano tensor
         Element-wise log probability, this has to be summed for multi-variate distributions.
     """
-    return c - log_var/2 - (x - mean)**2 / (2 * T.exp(log_var))
+    return c - log_var/2 - (x - mean)**2 / (2 * T.exp(log_var) + 1e-8)
 
 def log_stdnormal(x):
     """
@@ -86,6 +86,7 @@ def log_bernoulli(x, p):
     Theano tensor
         Element-wise log probability, this has to be summed for multi-variate distributions.
     """
+    p = T.clip(p, 1e-6, 1.0 - 1e-6)
     return -T.nnet.binary_crossentropy(p, x)
 
 
@@ -112,6 +113,7 @@ def log_multinomial(x, p):
     Theano tensor
         Element-wise log probability
     """
+    p += 1e-8
     return -T.nnet.categorical_crossentropy(p, x)
 
 
