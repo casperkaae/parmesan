@@ -3,7 +3,7 @@ import theano.tensor as T
 c = - 0.5 * math.log(2*math.pi)
 
 
-def log_normal(x, mean, sd, eps=1e-8):
+def log_normal(x, mean, sd, eps=0.0):
     """
     Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
 
@@ -28,7 +28,7 @@ def log_normal(x, mean, sd, eps=1e-8):
     return c - T.log(T.abs_(sd)) - (x - mean)**2 / (2 * sd**2 + eps)
 
 
-def log_normal2(x, mean, log_var, eps=1e-8):
+def log_normal2(x, mean, log_var, eps=0.0):
     """
     Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
     Here variance is parameterized in the log domain, which ensures :math:`\sigma > 0`.
@@ -72,7 +72,7 @@ def log_stdnormal(x):
     return c - x**2 / 2
 
 
-def log_bernoulli(x, p, eps=1e-6):
+def log_bernoulli(x, p, eps=0.0):
     """
     Compute log pdf of a Bernoulli distribution with success probability p, at values x.
 
@@ -96,7 +96,7 @@ def log_bernoulli(x, p, eps=1e-6):
     return -T.nnet.binary_crossentropy(p, x)
 
 
-def log_multinomial(x, p, eps=1e-8):
+def log_multinomial(x, p, eps=0.0):
     """
     Compute log pdf of multinomial distribution
 
