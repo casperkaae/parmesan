@@ -3,7 +3,7 @@ import theano.tensor as T
 c = - 0.5 * math.log(2*math.pi)
 
 
-def log_normal(x, mean, sd):
+def log_normal(x, mean, sd, eps=0.0):
     """
     Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
 
@@ -17,16 +17,18 @@ def log_normal(x, mean, sd):
         Mean of the Gaussian distribution.
     sd : Theano tensor
         Standard deviation of the diagonal covariance Gaussian.
+    eps : float
+        Small number used to avoid NaNs
 
     Returns
     -------
     Theano tensor
         Element-wise log probability, this has to be summed for multi-variate distributions.
     """
-    return c - T.log(T.abs_(sd)) - (x - mean)**2 / (2 * sd**2)
+    return c - T.log(T.abs_(sd)) - (x - mean)**2 / (2 * sd**2 + eps)
 
 
-def log_normal2(x, mean, log_var):
+def log_normal2(x, mean, log_var, eps=0.0):
     """
     Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
     Here variance is parameterized in the log domain, which ensures :math:`\sigma > 0`.
@@ -41,13 +43,15 @@ def log_normal2(x, mean, log_var):
         Mean of the Gaussian distribution.
     log_var : Theano tensor
         Log variance of the diagonal covariance Gaussian.
+    eps : float
+        Small number used to avoid NaNs
 
     Returns
     -------
     Theano tensor
         Element-wise log probability, this has to be summed for multi-variate distributions.
     """
-    return c - log_var/2 - (x - mean)**2 / (2 * T.exp(log_var))
+    return c - log_var/2 - (x - mean)**2 / (2 * T.exp(log_var) + eps)
 
 def log_stdnormal(x):
     """
@@ -68,7 +72,7 @@ def log_stdnormal(x):
     return c - x**2 / 2
 
 
-def log_bernoulli(x, p):
+def log_bernoulli(x, p, eps=0.0):
     """
     Compute log pdf of a Bernoulli distribution with success probability p, at values x.
 
@@ -80,16 +84,19 @@ def log_bernoulli(x, p):
         Values at which to evaluate pdf.
     p : Theano tensor
         Success probability :math:`p(x=1)`, which is also the mean of the Bernoulli distribution.
+    eps : float
+        Small number used to avoid NaNs
 
     Returns
     -------
     Theano tensor
         Element-wise log probability, this has to be summed for multi-variate distributions.
     """
+    p = T.clip(p, eps, 1.0 - eps)
     return -T.nnet.binary_crossentropy(p, x)
 
 
-def log_multinomial(x, p):
+def log_multinomial(x, p, eps=0.0):
     """
     Compute log pdf of multinomial distribution
 
@@ -106,12 +113,15 @@ def log_multinomial(x, p):
         samples by class matrix with class probabilities.
     p : Theano tensor
         Samples by class matrix with predicted class probabilities
+    eps : float
+        Small number used to avoid NaNs
 
     Returns
     -------
     Theano tensor
         Element-wise log probability
     """
+    p += eps
     return -T.nnet.categorical_crossentropy(p, x)
 
 
