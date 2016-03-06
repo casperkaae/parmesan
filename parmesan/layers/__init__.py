@@ -3,3 +3,4 @@ from .special import *
 from .flow import *
 from .ladderlayers import *
 from .normalize import *
+from .dense import *
