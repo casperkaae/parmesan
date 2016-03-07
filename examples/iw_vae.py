@@ -211,7 +211,7 @@ def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, eq_samples, iw_samp
     # so we sum over feature/latent dimensions for multivariate pdfs
     log_qz_given_x = log_normal2(z, z_mu, z_log_var).sum(axis=3)
     log_pz = log_stdnormal(z).sum(axis=3)
-    log_px_given_z = log_bernoulli(x, eps=epsilon).sum(axis=3)
+    log_px_given_z = log_bernoulli(x, x_mu, eps=epsilon).sum(axis=3)
 
     #all log_*** should have dimension (batch_size, eq_samples, iw_samples)
     # Calculate the LL using log-sum-exp to avoid underflow
