@@ -241,7 +241,7 @@ def latent_gaussian_x_bernoulli(z0, zk, z0_mu, z0_log_var, logdet_J_list, x_mu, 
     # so we sum over feature/latent dimensions for multivariate pdfs
     log_q0z0_given_x = log_normal2(z0, z0_mu, z0_log_var).sum(axis=3)
     log_pzk = log_stdnormal(zk).sum(axis=3)
-    log_px_given_zk = log_bernoulli(x, eps=epsilon).sum(axis=3)
+    log_px_given_zk = log_bernoulli(x, x_mu, eps=epsilon).sum(axis=3)
 
     #normalizing flow loss
     sum_logdet_J = 0
