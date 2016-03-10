@@ -112,12 +112,12 @@ def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, analytic_kl_term):
     """
     if analytic_kl_term:
         kl_term = kl_normal2_stdnormal(z_mu, z_log_var).sum(axis=1)
-        log_px_given_z = log_bernoulli(x, x_mu).sum(axis=1)
+        log_px_given_z = log_bernoulli(x, x_mu,  eps=1e-6).sum(axis=1)
         LL = T.mean(-kl_term + log_px_given_z)
     else:
         log_qz_given_x = log_normal2(z, z_mu, z_log_var).sum(axis=1)
         log_pz = log_stdnormal(z).sum(axis=1)
-        log_px_given_z = log_bernoulli(x, x_mu).sum(axis=1)
+        log_px_given_z = log_bernoulli(x, x_mu,  eps=1e-6).sum(axis=1)
         LL = T.mean(log_pz + log_px_given_z - log_qz_given_x)
     return LL
 
