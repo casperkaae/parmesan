@@ -541,11 +541,12 @@ def load_svhn(
     :param extra: include extra svhn samples
     :return:
     '''
+
     if not os.path.isfile(dataset +'svhn_train.cpkl'):
         datasetfolder = os.path.dirname(dataset +'svhn_train.cpkl')
         if not os.path.exists(datasetfolder):
             os.makedirs(datasetfolder)
-        _download_svhn(dataset)
+        _download_svhn(dataset, extra=False)
 
     with open(dataset +'svhn_train.cpkl', 'rb') as f:
         train_x,train_y = cPkl.load(f)
@@ -553,6 +554,12 @@ def load_svhn(
         test_x,test_y = cPkl.load(f)
 
     if extra:
+        if not os.path.isfile(dataset +'svhn_extra.cpkl'):
+            datasetfolder = os.path.dirname(dataset +'svhn_train.cpkl')
+            if not os.path.exists(datasetfolder):
+                os.makedirs(datasetfolder)
+            _download_svhn(dataset, extra=True)
+
         with open(dataset +'svhn_extra.cpkl', 'rb') as f:
             extra_x,extra_y = cPkl.load(f)
         train_x = np.concatenate([train_x,extra_x])
@@ -575,7 +582,7 @@ def load_svhn(
 
 
 
-def _download_svhn(dataset):
+def _download_svhn(dataset, extra):
     """
     Download the SVHN dataset
     """
@@ -583,37 +590,42 @@ def _download_svhn(dataset):
 
     print 'Downloading data from http://ufldl.stanford.edu/housenumbers/, ' \
           'this may take a while...'
-    print "Downloading train data..."
-    urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/train_32x32.mat',
-                       dataset+'train_32x32.mat')
-    print "Downloading test data..."
-    urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/test_32x32.mat',
-                       dataset+'test_32x32.mat')
-    print "Downloading extra data..."
-    urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/extra_32x32.mat',
-                       dataset+'extra_32x32.mat')
+    if extra:
+        print "Downloading extra data..."
+        urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/extra_32x32.mat',
+                           dataset+'extra_32x32.mat')
+        extra = loadmat(dataset+'extra_32x32.mat')
+        extra_x = extra['X'].swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
+        extra_y = extra['y'].reshape((-1)) - 1
 
-    train = loadmat(dataset+'train_32x32.mat')
-    train_x = train['X'].swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
-    train_y = train['y'].reshape((-1)) - 1
-    test = loadmat(dataset+'test_32x32.mat')
-    test_x = test['X'].swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
-    test_y = test['y'].reshape((-1)) - 1
-    extra = loadmat(dataset+'extra_32x32.mat')
-    extra_x = extra['X'].swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
-    extra_y = extra['y'].reshape((-1)) - 1
-    print "Saving train data"
-    with open(dataset +'svhn_train.cpkl', 'w') as f:
-        cPkl.dump([train_x,train_y],f,protocol=cPkl.HIGHEST_PROTOCOL)
-    print "Saving test data"
-    with open(dataset +'svhn_test.cpkl', 'w') as f:
-        pkl.dump([test_x,test_y],f,protocol=cPkl.HIGHEST_PROTOCOL)
-    print "Saving extra data"
-    with open(dataset +'svhn_extra.cpkl', 'w') as f:
-        pkl.dump([extra_x,extra_y],f,protocol=cPkl.HIGHEST_PROTOCOL)
-    os.remove(dataset+'train_32x32.mat')
-    os.remove(dataset+'test_32x32.mat')
-    os.remove(dataset+'extra_32x32.mat')
+        print "Saving extra data"
+        with open(dataset +'svhn_extra.cpkl', 'w') as f:
+            pkl.dump([extra_x,extra_y],f,protocol=cPkl.HIGHEST_PROTOCOL)
+        os.remove(dataset+'extra_32x32.mat')
+
+    else:
+        print "Downloading train data..."
+        urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/train_32x32.mat',
+                           dataset+'train_32x32.mat')
+        print "Downloading test data..."
+        urllib.urlretrieve('http://ufldl.stanford.edu/housenumbers/test_32x32.mat',
+                           dataset+'test_32x32.mat')
+
+        train = loadmat(dataset+'train_32x32.mat')
+        train_x = train['X'].swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
+        train_y = train['y'].reshape((-1)) - 1
+        test = loadmat(dataset+'test_32x32.mat')
+        test_x = test['X'].swapaxes(2,3).swapaxes(1,2).swapaxes(0,1)
+        test_y = test['y'].reshape((-1)) - 1
+
+        print "Saving train data"
+        with open(dataset +'svhn_train.cpkl', 'w') as f:
+            cPkl.dump([train_x,train_y],f,protocol=cPkl.HIGHEST_PROTOCOL)
+        print "Saving test data"
+        with open(dataset +'svhn_test.cpkl', 'w') as f:
+            pkl.dump([test_x,test_y],f,protocol=cPkl.HIGHEST_PROTOCOL)
+        os.remove(dataset+'train_32x32.mat')
+        os.remove(dataset+'test_32x32.mat')
 
 
 
@@ -850,3 +862,8 @@ def _one_hot(x,n_labels=None):
     if n_labels == None:
         n_labels = np.max(x)
     return np.eye(n_labels)[x]
+
+
+if __name__ == "__main__":
+    out = load_svhn()
+    print "done"
