@@ -10,6 +10,7 @@ import lasagne
 from parmesan.distributions import log_stdnormal, log_normal2, log_bernoulli
 from parmesan.layers import SampleLayer, NormalizeLayer, ScaleAndShiftLayer
 from parmesan.datasets import load_mnist_realval, load_mnist_binarized
+from parmesan.utils import log_mean_exp
 import matplotlib.pyplot as plt
 import shutil, gzip, os, cPickle, time, math, operator, argparse
 
@@ -211,26 +212,11 @@ def latent_gaussian_x_bernoulli(z, z_mu, z_log_var, x_mu, x, eq_samples, iw_samp
     # so we sum over feature/latent dimensions for multivariate pdfs
     log_qz_given_x = log_normal2(z, z_mu, z_log_var).sum(axis=3)
     log_pz = log_stdnormal(z).sum(axis=3)
-    log_px_given_z = log_bernoulli(x, x_mu, eps=epsilon).sum(axis=3)
+    log_px_given_z = log_bernoulli(x, x_mu, epsilon).sum(axis=3)
 
-    #all log_*** should have dimension (batch_size, eq_samples, iw_samples)
-    # Calculate the LL using log-sum-exp to avoid underflow
-    a = log_pz + log_px_given_z - log_qz_given_x    # size: (batch_size, eq_samples, iw_samples)
-    a_max = T.max(a, axis=2, keepdims=True)         # size: (batch_size, eq_samples, 1)
-
-    # LL is calculated using Eq (8) in Burda et al.
-    # Working from inside out of the calculation below:
-    # T.exp(a-a_max): (batch_size, eq_samples, iw_samples)
-    # -> subtract a_max to avoid overflow. a_max is specific for  each set of
-    # importance samples and is broadcasted over the last dimension.
-    #
-    # T.log( T.mean(T.exp(a-a_max), axis=2) ): (batch_size, eq_samples)
-    # -> This is the log of the sum over the importance weighted samples
-    #
-    # The outer T.mean() computes the mean over eq_samples and batch_size
-    #
-    # Lastly we add T.mean(a_max) to correct for the log-sum-exp trick
-    LL = T.mean(a_max) + T.mean( T.log( T.mean(T.exp(a-a_max), axis=2) ) )
+    # Calculate the LL using log-sum-exp to avoid underflow                   all log_***                                       -> shape: (batch_size, eq_samples, iw_samples)
+    LL = log_mean_exp(log_pz + log_px_given_z - log_qz_given_x, axis=2)     # log-mean-exp over iw_samples dimension            -> shape: (batch_size, eq_samples)
+    LL = T.mean(LL)                                                         # average over eq_samples, batch_size dimensions    -> shape: ()
 
     return LL, T.mean(log_qz_given_x), T.mean(log_pz), T.mean(log_px_given_z)
 
