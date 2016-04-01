@@ -6,6 +6,7 @@ c = - 0.5 * math.log(2*math.pi)
 def log_normal(x, mean, sd, eps=0.0):
     """
     Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
+    Variance is parameterized as standard deviation.
 
         .. math:: \log p(x) = \log \mathcal{N}(x; \mu, \sigma^2I)
     
@@ -24,14 +25,51 @@ def log_normal(x, mean, sd, eps=0.0):
     -------
     Theano tensor
         Element-wise log probability, this has to be summed for multi-variate distributions.
+
+    See also
+    --------
+    log_normal1 : using variance parameterization
+    log_normal2 : using log variance parameterization
     """
     return c - T.log(T.abs_(sd)) - (x - mean)**2 / (2 * sd**2 + eps)
+
+
+def log_normal1(x, mean, var, eps=0.0):
+    """
+    Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
+    Variance is parameterized as variance rather than standard deviation.
+
+        .. math:: \log p(x) = \log \mathcal{N}(x; \mu, \sigma^2I)
+    
+    Parameters
+    ----------
+    x : Theano tensor
+        Values at which to evaluate pdf.
+    mean : Theano tensor
+        Mean of the Gaussian distribution.
+    var : Theano tensor
+        Variance of the diagonal covariance Gaussian.
+    eps : float
+        Small number used to avoid NaNs
+
+    Returns
+    -------
+    Theano tensor
+        Element-wise log probability, this has to be summed for multi-variate distributions.
+
+    See also
+    --------
+    log_normal : using standard deviation parameterization
+    log_normal2 : using log variance parameterization
+    """
+    var += eps
+    return c - T.log(var)/2 - (x - mean)**2 / (2*var)
 
 
 def log_normal2(x, mean, log_var, eps=0.0):
     """
     Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
-    Here variance is parameterized in the log domain, which ensures :math:`\sigma > 0`.
+    Variance is parameterized as log variance rather than standard deviation, which ensures :math:`\sigma > 0`.
 
         .. math:: \log p(x) = \log \mathcal{N}(x; \mu, \sigma^2I)
     
@@ -50,8 +88,14 @@ def log_normal2(x, mean, log_var, eps=0.0):
     -------
     Theano tensor
         Element-wise log probability, this has to be summed for multi-variate distributions.
+
+    See also
+    --------
+    log_normal : using standard deviation parameterization
+    log_normal1 : using variance parameterization
     """
     return c - log_var/2 - (x - mean)**2 / (2 * T.exp(log_var) + eps)
+
 
 def log_stdnormal(x):
     """
@@ -155,6 +199,5 @@ def kl_normal2_stdnormal(mean, log_var):
         ..  [KINGMA] Kingma, Diederik P., and Max Welling.
             "Auto-Encoding Variational Bayes."
             arXiv preprint arXiv:1312.6114 (2013).
-
     """
     return -0.5*(1 + log_var - mean**2 - T.exp(log_var))
