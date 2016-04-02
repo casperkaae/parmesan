@@ -201,3 +201,34 @@ def kl_normal2_stdnormal(mean, log_var):
             arXiv preprint arXiv:1312.6114 (2013).
     """
     return -0.5*(1 + log_var - mean**2 - T.exp(log_var))
+
+def kl_normal2_normal2(mean1, log_var1, mean2, log_var2):
+    """
+    Compute analytically integrated KL-divergence between two diagonal covariance Gaussians.
+
+    .. math::
+
+       D_{KL}[q||p] &= -\int p(x) \log q(x) dx + \int p(x) \log p(x) dx     \\
+                    &= -\int \mathcal{N}(x; \mu_2, \sigma^2_2) \log \mathcal{N}(x; \mu_1, \sigma^2_1) dx
+                        + \int \mathcal{N}(x; \mu_2, \sigma^2_2) \log \mathcal{N}(x; \mu_2, \sigma^2_2) dx     \\
+                    &= \frac{1}{2} \log(2\pi\sigma^2_2) + \frac{\sigma^2_1 + (\mu_1 - \mu_2)^2}{2\sigma^2_2} 
+                        - \frac{1}{2}( 1 + \log(2\pi\sigma^2_1) )      \\
+                    &= \log \frac{\sigma_2}{\sigma_1} + \frac{\sigma^2_1 + (\mu_1 - \mu_2)^2}{2\sigma^2_2} - \frac{1}{2}
+
+    Parameters
+    ----------
+    mean1 : Theano tensor
+        Mean of the q Gaussian.
+    log_var1 : Theano tensor
+        Log variance of the q Gaussian.
+    mean2 : Theano tensor
+        Mean of the p Gaussian.
+    log_var2 : Theano tensor
+        Log variance of the p Gaussian.
+
+    Returns
+    -------
+    Theano tensor
+        Element-wise KL-divergence, this has to be summed when the Gaussian distributions are multi-variate.
+    """
+    return 0.5*log_var2 - 0.5*log_var1 + (T.exp(log_var1) + (mean1 - mean2)**2) / (2*T.exp(log_var2)) - 0.5
