@@ -1,9 +1,11 @@
 import math
 import theano.tensor as T
+
+
 c = - 0.5 * math.log(2*math.pi)
 
 
-def log_normal(x, mean, std, epsilon=0.0):
+def log_normal(x, mean, std, eps=0.0):
     """
     Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
     Variance is parameterized as standard deviation.
@@ -18,8 +20,8 @@ def log_normal(x, mean, std, epsilon=0.0):
         Mean of the Gaussian distribution.
     std : Theano tensor
         Standard deviation of the diagonal covariance Gaussian.
-    epsilon : float
-        Small number used to avoid NaNs.
+    eps : float
+        Small number added to standard deviation to avoid NaNs.
 
     Returns
     -------
@@ -31,10 +33,11 @@ def log_normal(x, mean, std, epsilon=0.0):
     log_normal1 : using variance parameterization
     log_normal2 : using log variance parameterization
     """
-    return c - T.log(T.abs_(std)) - (x - mean)**2 / (2 * std**2 + epsilon)
+    std += eps
+    return c - T.log(T.abs_(std)) - (x - mean)**2 / (2 * std**2)
 
 
-def log_normal1(x, mean, var, epsilon=0.0):
+def log_normal1(x, mean, var, eps=0.0):
     """
     Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
     Variance is parameterized as variance rather than standard deviation.
@@ -49,8 +52,8 @@ def log_normal1(x, mean, var, epsilon=0.0):
         Mean of the Gaussian distribution.
     var : Theano tensor
         Variance of the diagonal covariance Gaussian.
-    epsilon : float
-        Small number used to avoid NaNs.
+    eps : float
+        Small number added to variance to avoid NaNs.
 
     Returns
     -------
@@ -62,11 +65,11 @@ def log_normal1(x, mean, var, epsilon=0.0):
     log_normal : using standard deviation parameterization
     log_normal2 : using log variance parameterization
     """
-    var += epsilon
+    var += eps
     return c - T.log(var)/2 - (x - mean)**2 / (2*var)
 
 
-def log_normal2(x, mean, log_var, epsilon=0.0):
+def log_normal2(x, mean, log_var, eps=0.0):
     """
     Compute log pdf of a Gaussian distribution with diagonal covariance, at values x.
     Variance is parameterized as log variance rather than standard deviation, which ensures :math:`\sigma > 0`.
@@ -81,8 +84,8 @@ def log_normal2(x, mean, log_var, epsilon=0.0):
         Mean of the Gaussian distribution.
     log_var : Theano tensor
         Log variance of the diagonal covariance Gaussian.
-    epsilon : float
-        Small number used to avoid NaNs.
+    eps : float
+        Small number added to denominator to avoid NaNs.
 
     Returns
     -------
@@ -94,7 +97,7 @@ def log_normal2(x, mean, log_var, epsilon=0.0):
     log_normal : using standard deviation parameterization
     log_normal1 : using variance parameterization
     """
-    return c - log_var/2 - (x - mean)**2 / (2 * T.exp(log_var) + epsilon)
+    return c - log_var/2 - (x - mean)**2 / (2 * T.exp(log_var) + eps)
 
 
 def log_stdnormal(x):
@@ -116,7 +119,7 @@ def log_stdnormal(x):
     return c - x**2 / 2
 
 
-def log_bernoulli(x, p, epsilon=0.0):
+def log_bernoulli(x, p, eps=0.0):
     """
     Compute log pdf of a Bernoulli distribution with success probability p, at values x.
 
@@ -128,19 +131,19 @@ def log_bernoulli(x, p, epsilon=0.0):
         Values at which to evaluate pdf.
     p : Theano tensor
         Success probability :math:`p(x=1)`, which is also the mean of the Bernoulli distribution.
-    epsilon : float
-        Small number used to avoid NaNs.
+    eps : float
+        Small number used to avoid NaNs by clipping p in range [eps;1-eps].
 
     Returns
     -------
     Theano tensor
         Element-wise log probability, this has to be summed for multi-variate distributions.
     """
-    p = T.clip(p, epsilon, 1.0 - epsilon)
+    p = T.clip(p, eps, 1.0 - eps)
     return -T.nnet.binary_crossentropy(p, x)
 
 
-def log_multinomial(x, p, epsilon=0.0):
+def log_multinomial(x, p, eps=0.0):
     """
     Compute log pdf of multinomial distribution
 
@@ -157,22 +160,52 @@ def log_multinomial(x, p, epsilon=0.0):
         samples by class matrix with class probabilities.
     p : Theano tensor
         Samples by class matrix with predicted class probabilities.
-    epsilon : float
-        Small number used to avoid NaNs.
+    eps : float
+        Small number used to avoid NaNs by offsetting p.
 
     Returns
     -------
     Theano tensor
         Element-wise log probability.
     """
-    p += epsilon
+    p += eps
     return -T.nnet.categorical_crossentropy(p, x)
 
 
+def kl_normal1_stdnormal(mean, var, eps=0.0):
+    """
+    Closed-form solution of the KL-divergence between a Gaussian parameterized 
+    with diagonal variance and a standard Gaussian.
+
+    .. math::
+
+        D_{KL}[\mathcal{N}(\mu, \sigma^2 I) || \mathcal{N}(0, I)]
+
+    Parameters
+    ----------
+    mean : Theano tensor
+        Mean of the diagonal covariance Gaussian.
+    var : Theano tensor
+        Variance of the diagonal covariance Gaussian.
+    eps : float
+        Small number added to variance to avoid NaNs.
+
+    Returns
+    -------
+    Theano tensor
+        Element-wise KL-divergence, this has to be summed when the Gaussian distributions are multi-variate.
+    
+    See also
+    --------
+    kl_normal2_stdnormal : using log variance parameterization
+    """
+    var += eps
+    return -0.5*(1 + T.log(var) - mean**2 - var)
+
 def kl_normal2_stdnormal(mean, log_var):
     """
-    Compute analytically integrated KL-divergence between a diagonal covariance Gaussian and 
-    a standard Gaussian.
+    Compute closed-form solution to the KL-divergence between a Gaussian parameterized 
+    with diagonal log variance and a standard Gaussian.
 
     In the setting of the variational autoencoder, when a Gaussian prior and diagonal Gaussian 
     approximate posterior is used, this analytically integrated KL-divergence term yields a lower variance 
@@ -194,6 +227,10 @@ def kl_normal2_stdnormal(mean, log_var):
     Theano tensor
         Element-wise KL-divergence, this has to be summed when the Gaussian distributions are multi-variate.
 
+    See also
+    --------
+    kl_normal1_stdnormal : using variance parameterization
+
     References
     ----------
         ..  [KINGMA] Kingma, Diederik P., and Max Welling.
@@ -202,9 +239,42 @@ def kl_normal2_stdnormal(mean, log_var):
     """
     return -0.5*(1 + log_var - mean**2 - T.exp(log_var))
 
-def kl_normal2_normal2(mean1, log_var1, mean2, log_var2):
+
+def kl_normal1_normal1(mean1, var1, mean2, var2, eps=0.0):
     """
-    Compute analytically integrated KL-divergence between two diagonal covariance Gaussians.
+    Compute closed-form solution to the KL-divergence between two Gaussians parameterized 
+    with diagonal variance.
+
+    Parameters
+    ----------
+    mean1 : Theano tensor
+        Mean of the q Gaussian.
+    var1 : Theano tensor
+        Variance of the q Gaussian.
+    mean2 : Theano tensor
+        Mean of the p Gaussian.
+    var2 : Theano tensor
+        Variance of the p Gaussian.
+    eps : float
+        Small number added to variances to avoid NaNs.
+
+    Returns
+    -------
+    Theano tensor
+        Element-wise KL-divergence, this has to be summed when the Gaussian distributions are multi-variate.
+
+    See also
+    --------
+    kl_normal2_normal2 : using log variance parameterization
+    """
+    var1 += eps
+    var2 += eps
+    return 0.5*T.log(var2/var1) + (var1 + (mean1 - mean2)**2) / (2*var2) - 0.5
+
+def kl_normal2_normal2(mean1, log_var1, mean2, log_var2, eps=0.0):
+    """
+    Compute closed-form solution to the KL-divergence between two Gaussians parameterized 
+    with diagonal log variance.
 
     .. math::
 
@@ -225,10 +295,16 @@ def kl_normal2_normal2(mean1, log_var1, mean2, log_var2):
         Mean of the p Gaussian.
     log_var2 : Theano tensor
         Log variance of the p Gaussian.
+    eps : float
+        Small number added to denominator to avoid NaNs.
 
     Returns
     -------
     Theano tensor
         Element-wise KL-divergence, this has to be summed when the Gaussian distributions are multi-variate.
+
+    See also
+    --------
+    kl_normal1_normal1 : using variance parameterization
     """
-    return 0.5*log_var2 - 0.5*log_var1 + (T.exp(log_var1) + (mean1 - mean2)**2) / (2*T.exp(log_var2)) - 0.5
+    return 0.5*log_var2 - 0.5*log_var1 + (T.exp(log_var1) + (mean1 - mean2)**2) / (2*T.exp(log_var2) + eps) - 0.5

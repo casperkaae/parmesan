@@ -13,6 +13,7 @@ def log_sum_exp(A, axis=None, sum_op=T.sum):
     The log-sum-exp trick avoids these issues by using the identity,
 
     .. math::
+
         \log \sum_i \exp A_i = \log \sum_i \exp(A_i - c) + c, \text{using},  \\
         c = \max A.
 
