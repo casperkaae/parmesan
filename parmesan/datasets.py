@@ -441,7 +441,8 @@ def load_cifar10(
         test_x = data['data']
         test_y = np.asarray(data['labels'])
 
-
+    train_x = train_x.astype('float32')
+    test_x = test_x.astype('float32')
     if dequantify:
         train_x += np.random.uniform(0,1,size=train_x.shape).astype('float32')
         test_x += np.random.uniform(0,1,size=test_x.shape).astype('float32')
