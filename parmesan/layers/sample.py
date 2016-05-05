@@ -3,6 +3,7 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import theano.tensor as T
 import theano
 
+
 class SimpleSampleLayer(lasagne.layers.MergeLayer):
     """
     Simple sampling layer drawing a single Monte Carlo sample to approximate
@@ -135,3 +136,90 @@ class SampleLayer(lasagne.layers.MergeLayer):
             self.nonlinearity( log_var.dimshuffle(0,'x','x',1)) * eps
 
         return z.reshape((-1,num_latent))
+
+
+class SimpleBernoulliSampleLayer(lasagne.layers.Layer):
+    """
+    Simple sampling layer drawing samples from bernoulli distributions.
+
+    Parameters
+    ----------
+    mean : :class:`Layer` instances
+          Parameterizing the mean value of each bernoulli distribution
+    seed : int
+        seed to random stream
+    Methods
+    ----------
+    seed : Helper function to change the random seed after init is called
+    """
+
+    def __init__(self, mean,
+                 seed=lasagne.random.get_rng().randint(1, 2147462579),
+                 **kwargs):
+        super(SimpleBernoulliSampleLayer, self).__init__(mean, **kwargs)
+
+        self._srng = RandomStreams(seed)
+
+    def seed(self, seed=lasagne.random.get_rng().randint(1, 2147462579)):
+        self._srng.seed(seed)
+
+    def get_output_shape_for(self, input_shape):
+        return input_shape
+
+    def get_output_for(self, mu, **kwargs):
+        return self._srng.binomial(size=mu.shape, p=mu, dtype=mu.dtype)
+
+
+class BernoulliSampleLayer(lasagne.layers.Layer):
+    """
+    Bernoulli Sampling layer supporting importance sampling
+    Parameters
+    ----------
+    mean : class:`Layer` instance
+           Parameterizing the mean value of each bernoulli distribution
+    eq_samples : int or T.scalar
+        Number of Monte Carlo samples used to estimate the expectation over
+    iw_samples : int or T.scalar
+        Number of importance samples in the sum over k
+    seed : int
+        seed to random stream
+    Methods
+    ----------
+    seed : Helper function to change the random seed after init is called
+    """
+
+    def __init__(self, mean,
+                 eq_samples=1,
+                 iw_samples=1,
+                 seed=lasagne.random.get_rng().randint(1, 2147462579),
+                  **kwargs):
+        super(BernoulliSampleLayer, self).__init__(mean, **kwargs)
+
+        self.eq_samples = eq_samples
+        self.iw_samples = iw_samples
+
+        self._srng = RandomStreams(seed)
+
+    def seed(self, seed=lasagne.random.get_rng().randint(1, 2147462579)):
+        self._srng.seed(seed)
+
+    def get_output_shape_for(self, input_shape):
+        batch_size, num_latent = input_shape
+        if isinstance(batch_size, int) and \
+           isinstance(self.iw_samples, int) and \
+           isinstance(self.eq_samples, int):
+            out_dim = (batch_size*self.eq_samples*self.iw_samples, num_latent)
+        else:
+            out_dim = (None, num_latent)
+        return out_dim
+
+    def get_output_for(self, input, **kwargs):
+        mu = input
+        batch_size, num_latent = mu.shape
+        shp = (batch_size, self.eq_samples, self.iw_samples, num_latent)
+        mu_shp = mu.dimshuffle(0,'x','x',1)
+        mu_shp = T.repeat(mu_shp, axis=1, repeats=self.eq_samples)
+        mu_shp = T.repeat(mu_shp, axis=2, repeats=self.iw_samples)
+        samples = self._srng.binomial(
+            size=shp, p=mu_shp, dtype=theano.config.floatX)
+        return samples.reshape((-1, num_latent))
