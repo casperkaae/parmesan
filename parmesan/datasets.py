@@ -124,8 +124,9 @@ def load_norb_small(
         train_x += np.random.uniform(0,1,size=train_x.shape).astype('float32')
         test_x += np.random.uniform(0,1,size=test_x.shape).astype('float32')
     if normalize:
-        train_x = train_x / 256.
-        test_x = test_x / 256.
+        normalizer = train_x.max().astype('float32')
+        train_x = train_x / normalizer
+        test_x = test_x / normalizer
 
     return train_x, train_t, test_x, test_t
 
@@ -447,8 +448,9 @@ def load_cifar10(
         train_x += np.random.uniform(0,1,size=train_x.shape).astype('float32')
         test_x += np.random.uniform(0,1,size=test_x.shape).astype('float32')
     if normalize:
-        train_x = train_x / 256.
-        test_x = test_x / 256.
+        normalizer = train_x.max().astype('float32')
+        train_x = train_x / normalizer
+        test_x = test_x / normalizer
 
     train_x = train_x.reshape((50000, 3, 32, 32)).transpose(0, 2, 3, 1)
     test_x = test_x.reshape((10000, 3, 32, 32)).transpose(0, 2, 3, 1)
@@ -486,7 +488,8 @@ def load_frey_faces(
     if dequantify:
         data = data + np.random.uniform(0,1,size=data.shape).astype('float32')
     if normalize:
-        data = data / 256.
+        normalizer = data.max().astype('float32')
+        data = data / normalizer
     return data
 
 def load_lfw(
@@ -524,7 +527,8 @@ def load_lfw(
     if dequantify:
         data = data + np.random.uniform(0,1,size=data.shape).astype('float32')
     if normalize:
-        data = data / 256.
+        normalizer = data.max().astype('float32')
+        data = data / normalizer
     return data
 
 
@@ -576,8 +580,9 @@ def load_svhn(
         test_x += np.random.uniform(0,1,size=test_x.shape).astype('float32')
 
     if normalize:
-        train_x = train_x / 256.
-        test_x = test_x / 256.
+        normalizer = train_x.max().astype('float32')
+        train_x = train_x / normalizer
+        test_x = test_x / normalizer
 
     return train_x, train_y, test_x, test_y
 
@@ -860,9 +865,94 @@ def load_rotten_tomatoes(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
 
 
 def _one_hot(x,n_labels=None):
-    if n_labels == None:
+    if n_labels is None:
         n_labels = np.max(x)
     return np.eye(n_labels)[x]
+
+def _download_and_extract_stl10(dest_directory):
+    """
+    SOURCE: https://github.com/mttk/STL10
+    Download and extract the STL-10 dataset
+    :return: None
+    """
+    import sys
+    origin = 'http://ai.stanford.edu/~acoates/stl10/stl10_binary.tar.gz'
+    if not os.path.exists(dest_directory):
+        os.makedirs(dest_directory)
+    filename = origin.split('/')[-1]
+    filepath = os.path.join(dest_directory, filename)
+    if not os.path.exists(filepath):
+        def _progress(count, block_size, total_size):
+            sys.stdout.write('\rDownloading %s %.2f%%' % (filename,
+                float(count * block_size) / float(total_size) * 100.0))
+            sys.stdout.flush()
+        filepath, _ = urllib.urlretrieve(origin, filepath, reporthook=_progress)
+        print('Downloaded', filename)
+
+    binary_directory = os.path.join(dest_directory, 'stl10_binary')
+    if not os.path.exists(binary_directory):
+        tarfile.open(filepath, 'r:gz').extractall(dest_directory)
+    return binary_directory
+
+
+def load_stl10(
+        dataset=_get_datafolder_path()+'/stl10/stl10_binary.tar.gz',
+        normalize=False,
+        dequantify=False):
+    '''
+    Loads the stl10 dataset
+    :param dataset: path to dataset file
+    :param normalize: Not supported. For normalization we would need to
+                      convert the dataset to float32 which would increase
+                      the dataset size further
+    :param dequantify: not supported
+    :return: data. Note that the data will be returned as uint8 to save memory.
+            You'll need to convert it to float32.
+
+
+
+    '''
+    if normalize is True:
+        raise ValueError('Normalization with STL10 loader is not supported. '
+                         'Create an iterator that normalizes on the fly')
+    if dequantify is True:
+        raise ValueError('Dequantify is not supported with STL10 loader. '
+                         'Create an iterator that dequantifies on the fly')
+
+    def read_all_images(path_to_data):
+        print "Loading %s" % path_to_data,
+        with open(path_to_data, 'rb') as f:
+            # read whole file in uint8 chunks
+            everything = np.fromfile(f, dtype=np.uint8)
+            images = np.reshape(everything, (-1, 3, 96, 96))
+            images = np.transpose(images, (0, 1, 3, 2))
+            print "shp", images.shape, "dtype", images.dtype
+            return images
+
+    def read_labels(path_to_labels):
+        print "Loading %s" % path_to_labels,
+        with open(path_to_labels, 'rb') as f:
+            labels = np.fromfile(f, dtype=np.uint8)
+            labels -= 1 # from 1...10 to 0...9
+            print "shp", labels.shape, "dtype", labels.dtype
+        return labels
+
+    datasetfolder = os.path.dirname(dataset)
+    # download and extract if nessesary
+    binary_directory = _download_and_extract_stl10(datasetfolder)
+
+    data_path_train = os.path.join(binary_directory, 'train_X.bin')
+    data_path_test = os.path.join(binary_directory, 'test_X.bin')
+    data_path_unlab = os.path.join(binary_directory, 'unlabeled_X.bin')
+    label_path_train = os.path.join(binary_directory, 'train_y.bin')
+    label_path_test = os.path.join(binary_directory, 'test_y.bin')
+
+    x_train = read_all_images(data_path_train)
+    x_test = read_all_images(data_path_test)
+    x_unlab = read_all_images(data_path_unlab)
+    y_train = read_labels(label_path_train)
+    y_test = read_labels(label_path_test)
+    return x_train, y_train, x_test, y_test, x_unlab
 
 
 if __name__ == "__main__":
