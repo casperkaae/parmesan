@@ -773,7 +773,6 @@ def load_rotten_tomatoes(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
 
     # count character counts and return the "character" most frequently
     # used vocab_size as list
-
     if isinstance(vocab_size, int):
         char_counts = Counter("".join(pos_lst + neg_lst))
         char_counts_sorted = sorted(
@@ -783,8 +782,9 @@ def load_rotten_tomatoes(dataset=_get_datafolder_path()+'/rotten_tomatoes/',
 
         print "Using VOCAB with the %i most frequent characters \n |%s|" % (
             vocab_size, "".join(chars))
-        print "Character counts", ", ".join(map(str, counts))
-
+        print "Character counts"
+        for chr_, count_ in zip(chars, counts):
+            print chr_, count_
         vocab = sorted(chars)
         char2idx = {char:idx for idx, char in enumerate(vocab)}
         unk_idx = max(char2idx.values()) + 1
@@ -955,6 +955,757 @@ def load_stl10(
     return x_train, y_train, x_test, y_test, x_unlab
 
 
+def _read_rotten_tomatoes(dataset):
+    try:
+        import pandas as pd
+    except:
+        raise ImportError('Pandas is required')
+
+    datasetfolder = os.path.dirname(dataset)
+
+    if not os.path.exists(datasetfolder):
+        os.makedirs(datasetfolder)
+
+    fn_pos = dataset + '/rt-polaritydata/rt-polarity.pos'
+    fn_neg = dataset + '/rt-polaritydata/rt-polarity.neg'
+    if not os.path.isfile(dataset + '/rt-polaritydata.tar.gz'):
+        origin = ('http://www.cs.cornell.edu/people/pabo/movie-review-data/rt-polaritydata.tar.gz')
+        print 'Downloading data from %s' % origin
+        urllib.urlretrieve(origin, dataset + '/rt-polaritydata.tar.gz')
+
+    with tarfile.open(dataset + '/rt-polaritydata.tar.gz', "r:gz") as tar:
+        tar.extractall(path=dataset)
+
+    # load review data
+    pos = pd.read_csv(
+        fn_pos, delimiter="\t", quoting=3, header=None)
+    neg = pd.read_csv(
+        fn_neg, header=None, delimiter="\t", quoting=3)
+    pos.columns = ["review"]
+    neg.columns = ["review"]
+    return pos, neg
+
+
+def _create_matrix(reviews, y_cls, char2idx, max_len, unk_idx, dtype='32'):
+    num_seqs = len(reviews)
+    X = np.zeros((num_seqs, max_len), dtype='int'+dtype) -1  # set all to -1
+    for row in range(num_seqs):
+        review = reviews[row]
+        for col in range(len(review)):
+            # try to look up key otherwise use unk_idx
+            if review[col] in char2idx:
+                char_idx = char2idx[review[col]]
+            else:
+                char_idx = unk_idx
+            X[row, col] = char_idx
+
+    mask = (X != -1).astype('float32')
+    X[X == -1] = 0
+    y = np.ones(num_seqs, dtype='int32')*y_cls
+    return X, y, mask
+
+
+def slice_masked_seq(x, mask, max_len):
+    """
+    Slices a sequence such that the last part is kept if the sequence is longer
+    than max_len.
+
+    Usefull if one assumes that the end of a sequence is more informative then
+    the beginning.
+
+    if x is shorter than max_len we return x
+    """
+    if x.shape[1] >= max_len:
+        num_seqs = x.shape[0]
+        output = np.zeros((num_seqs, max_len), dtype=x.dtype)
+        for row in range(num_seqs):
+            seq_len = np.sum(mask[row])
+            if seq_len <= max_len:
+                output[row] = x[row,:max_len]
+            else: # longer need slicing
+                output[row] = x[row, -max_len:]
+        return output
+    else:
+        return x
+
+
+def load_rotten_tomatoes_character(
+        dataset=_get_datafolder_path()+'/rotten_tomatoes/',vocab_size=40,
+        minimum_len=None, maximum_len=None, seed=1234):
+    """Loader for rotten tomatoes sentiment analysis dataset
+
+    :param dataset: str
+        path to dataset file
+    :param vocab_size: int or str
+         number of vocab_size in VOCAB. Defaults to the 40 most frequent chars
+         if str uses str as vocab.
+    :param minimum_len: None or int
+        Sequences below this length are removed
+    :param maximum_len: None or int
+        Sequences above this length are shorted. Start is removed.
+    :param seed: int
+         random seed for shuffle
+    :return: X, y, mask, vocab
+
+    Notes
+    -----
+    The vocab output can be used to encode several character dataset with
+    the same encoding.
+    """
+    print "-"*40
+    print "LOADING ROTTEN TOMATOES CHARACTER DATASET"
+    print "-"*40
+    from collections import Counter
+    pos, neg = _read_rotten_tomatoes(dataset)
+    # helper clean function
+    def clean(l):
+        l = l.strip('\n')
+        l = l.rstrip(' ')
+        l = l.lower()
+        return l
+
+    pos_lst = [clean(l) for l in pos['review']]
+    neg_lst = [clean(l) for l in neg['review']]
+
+    # count character counts and return the "character" most frequently
+    # used vocab_size as list
+
+    if isinstance(vocab_size, int):
+        char_counts = Counter("".join(pos_lst + neg_lst))
+        char_counts_sorted = sorted(
+            char_counts.items(), key=lambda x:x[1], reverse=True)
+
+        chars, counts = zip(*char_counts_sorted[:vocab_size])
+
+        print "Using VOCAB with the %i most frequent characters \n |%s|" % (
+            vocab_size, "".join(chars))
+        print "Character counts"
+        i_ = 0
+        for chr_, count_ in zip(chars, counts):
+            print i_, ":", chr_, count_
+            i_ += 1
+
+        vocab = sorted(chars)
+        char2idx = {char:idx for idx, char in enumerate(vocab)}
+        unk_idx = max(char2idx.values()) + 1
+    else:
+        vocab = vocab_size
+        print "Using VOCAB: |%s|" % vocab_size
+        char2idx = {char:idx for idx, char in enumerate(vocab_size)}
+        unk_idx = max(char2idx.values()) + 1
+
+    # find maximum sequence length
+    max_len = max(map(len, pos_lst + neg_lst))
+
+    # helper function for converting chars to matrix format
+
+
+    X_pos, y_pos, mask_pos = _create_matrix(
+        pos_lst, 1, char2idx, max_len, unk_idx)
+    X_neg, y_neg, mask_neg = _create_matrix(
+        neg_lst, 0, char2idx, max_len, unk_idx)
+    X = np.concatenate([X_pos, X_neg], axis=0)
+    y = np.concatenate([y_pos, y_neg], axis=0)
+    mask = np.concatenate([mask_pos, mask_neg])
+
+    print "-"*40
+    print "Minium length filter :", minimum_len
+    print "Maximum length filter:", maximum_len
+    if minimum_len is not None:
+        seq_lens = mask.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        print "Seqs below minimum   : %i" % np.invert(keep).sum()
+        X = X[keep, :]
+        y = y[keep]
+        mask = mask[keep, :]
+
+    if maximum_len is not None:
+        seq_lens = mask.sum(axis=1)
+        keep = seq_lens <= maximum_len
+        print "Seqs above maximum   : %i" % np.invert(keep).sum()
+        X = slice_masked_seq(X, mask, maximum_len)
+        mask = slice_masked_seq(mask, mask, maximum_len)
+
+    np.random.seed(seed)
+    p = np.random.permutation(X.shape[0])
+    X = X[p]
+    y = y[p]
+    mask = mask[p]
+
+    seq_lens = mask.sum(axis=1).astype('int32')
+    print "X                    :", X.shape, X.dtype
+    print "y                    :", y.shape, y.dtype
+    print "mask                 :", mask.shape, mask.dtype
+    print "MIN length           : ", seq_lens.min()
+    print "MAX length           : ", seq_lens.max()
+    print "MEAN length          : ", seq_lens.mean()
+    print "num UNKOWN chars     : ", np.sum(X==unk_idx)
+    print "-"*40
+
+    # check that idx's in X is the number of vocab_size + unk_idx
+    n = vocab_size if isinstance(vocab_size, int) else len(vocab_size)
+    assert len(np.unique(X)) == n  + 1
+    assert sum(np.unique(y)) == 1 # check that y is 0,1
+    return X, y, mask, vocab
+
+
+def load_rotten_tomatoes_words(
+        dataset=_get_datafolder_path()+'/rotten_tomatoes/', vocab_size=9986,
+        minimum_len=None, maximum_len=None, seed=1234):
+    """Loader for rotten tomatoes sentiment analysis dataset
+
+    Loads dataset as words
+
+    :param dataset: str
+        path to dataset file
+    :param vocab_size: int or list
+         number of words in VOCAB. Defaults to the 9986 most frequent
+         words. Default is all words with freq above 1.
+    :param minimum_len: None or int
+        Sequences below this length are removed
+    :param maximum_len: None or int
+        Sequences above this lenght are shorted.
+    :param seed: int
+         random seed for shuffle
+    :return: X, y, mask, vocab
+
+    Notes
+    -----
+    The vocab output can be used to encode several character dataset with
+    the same encoding.
+    """
+    print "-"*40
+    print "LOADING ROTTEN TOMATOES WORDS WORDS"
+    print "-"*40
+    from collections import Counter
+    import itertools
+    pos, neg = _read_rotten_tomatoes(dataset)
+
+    def clean(l):
+        l = re.sub("[^a-zA-Z]", " ", l)
+        l = re.sub(' +',' ', l)
+        l = l.rstrip()
+        l = l.lower()
+        return l
+
+    pos_lst = [clean(l) for l in pos['review']]
+    neg_lst = [clean(l) for l in neg['review']]
+    all_lst = pos_lst + neg_lst
+    # count character counts and return the "character" most frequently
+    # used vocab_size as list
+
+    if isinstance(vocab_size, int):
+        # join all data and split into a single large list of words
+        all_lst_split_chain = itertools.chain(*[l.split(" ") for l in all_lst])
+        words_counts = Counter(all_lst_split_chain)
+        words_counts_sorted = sorted(
+            words_counts.items(), key=lambda x:x[1], reverse=True)
+
+        words, counts = zip(*words_counts_sorted)
+        below_cutoff_words = words[vocab_size:vocab_size+5]
+        below_cutoff_counts = counts[vocab_size:vocab_size+5]
+        words = words[:vocab_size]
+        counts = counts[:vocab_size]
+
+
+        print "Using VOCAB with the %i most frequent words" % vocab_size
+        print "-"*40
+        print "Top counts   "
+        print "-"*40
+        for w, c in zip(words[:10], counts[:10]):
+            print w, c
+        print "-"*40
+        print "bottom counts"
+        print "-"*40
+        for w, c in zip(words[-10:], counts[-10:]):
+            print w, c
+        print "<----CUTOFF"
+        for w, c in zip(below_cutoff_words[-20:],
+                        below_cutoff_counts[-20:]):
+            print w, c
+        print "-"*40
+        vocab = words[:vocab_size]
+        char2idx = {char: idx for idx, char in enumerate(vocab)}
+        unk_idx = max(char2idx.values()) + 1
+    else:
+        vocab = vocab_size
+        char2idx = {char:idx for idx, char in enumerate(vocab_size)}
+        unk_idx = max(char2idx.values()) + 1
+
+    # split into words
+    pos_lst_words = [l.split(' ') for l in pos_lst]
+    neg_lst_words = [l.split(' ') for l in neg_lst]
+
+    # find maximum sequence length
+    max_len = max(map(len, pos_lst_words + neg_lst_words))
+
+    # helper function for converting chars to matrix format
+    X_pos, y_pos, mask_pos = _create_matrix(
+        pos_lst_words, 1, char2idx, max_len, unk_idx)
+    X_neg, y_neg, mask_neg = _create_matrix(
+        neg_lst_words, 0, char2idx, max_len, unk_idx)
+    X = np.concatenate([X_pos, X_neg], axis=0)
+    y = np.concatenate([y_pos, y_neg], axis=0)
+    mask = np.concatenate([mask_pos, mask_neg])
+
+    print "-"*40
+    print "Minium length filter :", minimum_len
+    print "Maximum length filter:", maximum_len
+    if minimum_len is not None:
+        seq_lens = mask.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        print "Seqs below minimum   : %i" % np.invert(keep).sum()
+        X = X[keep, :]
+        y = y[keep]
+        mask = mask[keep, :]
+
+    if maximum_len is not None:
+        seq_lens = mask.sum(axis=1)
+        keep = seq_lens <= maximum_len
+        print "Seqs above maximum   : %i" % np.invert(keep).sum()
+        X =slice_masked_seq(X, mask, maximum_len)
+        mask = maximum_len(mask, mask, maximum_len)
+
+
+    np.random.seed(seed)
+    p = np.random.permutation(X.shape[0])
+    X = X[p]
+    y = y[p]
+    mask = mask[p]
+
+    seq_lens = mask.sum(axis=1).astype('int32')
+    print "X                    :", X.shape, X.dtype
+    print "y                    :", y.shape, y.dtype
+    print "mask                 :", mask.shape, mask.dtype
+    print "MIN length           : ", seq_lens.min()
+    print "MAX length           : ", seq_lens.max()
+    print "MEAN length          : ", seq_lens.mean()
+    print "num UNKOWN words     : ", np.sum(X==unk_idx)
+    print "num targets          :", np.sum(np.max(y))+1
+    print "-"*40
+
+    # check that idx's in X is the number of vocab_size + unk_idx
+    return X, y, mask, vocab
+
+
+def load_imdb(dataset, clean):
+    from HTMLParser import HTMLParser
+    import glob
+
+    class MLStripper(HTMLParser):
+        def __init__(self):
+            self.reset()
+            self.fed = []
+
+        def handle_data(self, d):
+            self.fed.append(d)
+
+        def get_data(self):
+            return ''.join(self.fed)
+
+    def strip_tags(html):
+        s = MLStripper()
+        s.feed(html)
+        return s.get_data()
+
+    datasetfolder = os.path.dirname(dataset)
+
+    if not os.path.exists(datasetfolder):
+        os.makedirs(datasetfolder)
+
+    if not os.path.isfile(dataset + '/aclImdb_v1.tar.gz'):
+            origin = ('http://ai.stanford.edu/'
+                      '~amaas/data/sentiment/aclImdb_v1.tar.gz')
+            print 'Downloading data from %s' % origin
+            urllib.urlretrieve(origin, dataset + '/aclImdb_v1.tar.gz')
+
+    if not os.path.isdir(dataset + 'aclImdb'):
+        with tarfile.open(dataset + '/aclImdb_v1.tar.gz', "r:gz") as tar:
+            tar.extractall(path=dataset)
+
+    base_dir = dataset + 'aclImdb/'
+    train_pos = base_dir + "train/pos/*"
+    train_neg = base_dir + "train/neg/*"
+    train_unsup = base_dir + "train/unsup/*"
+    test_pos = base_dir + "test/pos/*"
+    test_neg = base_dir + "test/neg/*"
+
+    def read_folder(folder):
+        files = glob.glob(folder)
+        output = []
+        for idx, fn in enumerate(files):
+            if (idx+1) % 5000 == 0:
+                print idx, "of", len(files)
+            with open(fn, 'rb') as f:
+                output += [clean(strip_tags(f.readline()))]
+        return output
+
+    train_pos_lst = read_folder(train_pos)
+    train_neg_lst = read_folder(train_neg)
+    train_unsup_lst = read_folder(train_unsup)
+    test_pos_lst = read_folder(test_pos)
+    test_neg_lst = read_folder(test_neg)
+    return (train_pos_lst, train_neg_lst, train_unsup_lst,
+            test_pos_lst, test_neg_lst)
+
+
+def load_imdb_character(dataset=_get_datafolder_path()+'/imdb_sentiment/',
+                        vocab_size=40, minimum_len=None, maximum_len=None,
+                        seed=1234):
+    """Load imdb dataset as characters.
+
+    :param dataset: str
+        path to dataset file
+    :param vocab_size: int or str
+         if int number of characters in vocabulary. Defaults to the 40 most
+         frequent words.
+         if str uses str as vocab
+    :param minimum_len: None or int
+         Sequences below this length are removed
+    :param maximum_len: None or int
+         Sequences above this lenght are shorted. Begining is removed
+    :param seed: int
+         random seed for dataset
+    :return: X, y, mask, vocab
+
+    Notes
+    -----
+    The vocab output can be used to encode several character dataset with
+    the same encoding.
+    """
+    print "-"*40
+    print "LOADING IMDB WORDS CHARACTER DATASET"
+    print "-"*40
+    from collections import Counter
+    try:
+        import pandas as pd
+    except:
+        raise ImportError('Pandas is required')
+
+    def clean(l):
+        l = re.sub(' +', ' ', l)
+        l = l.rstrip()
+        l = l.lower()
+        return l
+
+    (train_pos_lst, train_neg_lst,
+     train_unsup_lst, test_pos_lst, test_neg_lst) = load_imdb(dataset, clean)
+    all_lst = (train_pos_lst + train_neg_lst +
+               test_pos_lst + test_neg_lst + train_unsup_lst)
+
+    # count character counts and return the "character" most frequently
+    # used vocab_size as list
+    if isinstance(vocab_size, int):
+        char_counts = Counter("".join(all_lst))
+        char_counts_sorted = sorted(
+            char_counts.items(), key=lambda x:x[1], reverse=True)
+
+        chars, counts = zip(*char_counts_sorted[:vocab_size])
+
+        print "Using VOCAB with the %i most frequent characters \n |%s|" % (
+            vocab_size, "".join(chars))
+        print "Character counts"
+        i_ = 0
+        for chr_, count_ in zip(chars, counts):
+            print i_, ":", chr_, count_
+            i_ += 1
+
+        vocab = sorted(chars)
+        char2idx = {char:idx for idx, char in enumerate(vocab)}
+        unk_idx = max(char2idx.values()) + 1
+    elif isinstance(vocab_size, list):
+        vocab = vocab_size
+        print "Using VOCAB: |%s|" % vocab_size
+        char2idx = {char:idx for idx, char in enumerate(vocab_size)}
+        unk_idx = max(char2idx.values()) + 1
+    else:
+        raise ValueError('Vocab should be int or list')
+
+    # find maximum sequence length
+    max_len = max(map(len, all_lst))
+    X_train_pos, y_train_pos, mask_train_pos = _create_matrix(
+        train_pos_lst, 1, char2idx, max_len, unk_idx, dtype='32')
+    X_train_neg, y_train_neg, mask_train_neg = _create_matrix(
+        train_neg_lst, 0, char2idx, max_len, unk_idx, dtype='32')
+    X_train_unsup, _, mask_train_unsup = _create_matrix(
+        train_unsup_lst, -1, char2idx, max_len, unk_idx, dtype='32')
+    X_train = np.concatenate([X_train_pos, X_train_neg], axis=0)
+    y_train = np.concatenate([y_train_pos, y_train_neg], axis=0)
+    mask_train = np.concatenate([mask_train_pos, mask_train_neg])
+
+    X_test_pos, y_test_pos, mask_test_pos = _create_matrix(
+        test_pos_lst, 1, char2idx, max_len, unk_idx, dtype='8')
+    X_test_neg, y_test_neg, mask_test_neg = _create_matrix(
+        test_neg_lst, 0, char2idx, max_len, unk_idx, dtype='8')
+    X_test = np.concatenate([X_test_pos, X_test_neg], axis=0)
+    y_test = np.concatenate([y_test_pos, y_test_neg], axis=0)
+    mask_test = np.concatenate([mask_test_pos, mask_test_neg])
+
+    print "-"*40
+    print "Minium length filter :", minimum_len
+    print "Maximum length filter:", maximum_len
+    if minimum_len is not None:
+        seq_lens = mask_train.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        print "Seqs below minimum   : %i" % np.invert(keep).sum()
+        X_train = X_train[keep, :]
+        y_train = y_train[keep]
+        mask_train = mask_train[keep, :]
+
+        seq_lens = mask_train_unsup.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        X_train_unsup = X_train_unsup[keep, :]
+
+    if maximum_len is not None:
+        seq_lens = mask_train.sum(axis=1)
+        keep = seq_lens <= minimum_len
+        print "Seqs above maximum   : %i" % np.invert(keep).sum()
+        X_train = slice_masked_seq(X_train, mask_train, maximum_len)
+        mask_train = slice_masked_seq(mask_train, mask_train, maximum_len)
+        X_train_unsup = slice_masked_seq(
+            X_train_unsup, mask_train_unsup, maximum_len)
+        mask_train_unsup = slice_masked_seq(
+            mask_train_unsup, mask_train_unsup, maximum_len)
+        X_test = slice_masked_seq(X_test, mask_test, maximum_len)
+        mask_test = slice_masked_seq(mask_test, mask_test, maximum_len)
+
+    np.random.seed(seed)
+    p = np.random.permutation(X_train.shape[0])
+    X_train = X_train[p]
+    y_train = y_train[p]
+    mask_train = mask_train[p]
+
+    p = np.random.permutation(X_train.shape[0])
+    X_train_unsup = X_train_unsup[p]
+    mask_train_unsup = mask_train_unsup[p]
+
+    seq_lens = mask_train.sum(axis=1).astype('int32')
+    print "train X              :", X_train.shape, X_train.dtype
+    print "train y              :", y_train.shape, y_train.dtype
+    print "train mask           :", mask_train.shape, mask_train.dtype
+    print "train X unsup        :", X_train_unsup.shape, X_train_unsup.dtype
+    print "train mask unsup     :", mask_train_unsup.shape, \
+        mask_train_unsup.dtype
+    print "test X               :", X_test.shape, X_test.dtype
+    print "test y               :", y_test.shape, y_test.dtype
+    print "test mask            :", mask_train.shape, mask_train.dtype
+    print "MIN length           : ", seq_lens.min()
+    print "MAX length           : ", seq_lens.max()
+    print "MEAN length          : ", seq_lens.mean()
+    print "num UNKOWN chars     : ", np.sum(X_train==unk_idx)
+    print "num targets          :", np.sum(np.max(y_train))+1
+    print "-"*40
+
+    # check that idx's in X is the number of vocab_size + unk_idx
+    n = vocab_size if isinstance(vocab_size, int) else len(vocab_size)
+    assert len(np.unique(X_train)) == n  + 1
+    assert sum(np.unique(y_train)) == 1 # check that y is 0,1
+    return (X_train, y_train, mask_train,
+            X_train_unsup, mask_train_unsup,
+            X_test, y_test, mask_test, vocab, char2idx)
+
+
+def load_imdb_words(dataset=_get_datafolder_path()+'/imdb_sentiment/',
+                         vocab_size='once', minimum_len=None, maximum_len=None,
+                         seed=1234):
+    """Loader for Imdb sentiment analysis dataset
+
+    Loads dataset as words
+
+    :param dataset: str
+        path to dataset file
+    :param vocab_size: int or list or 'once'
+         if int number of words in vocab.
+         if once: use all words appearing at least once
+         if list use list as vocabulary
+    :param minimum_len: None or int
+        Sequences below this length are removed
+    :param maximum_len: None or int
+        Sequences above this length are shorted. Start is removed
+    :param seed: int
+         random seed for datasplit
+    :return: X, y, mask, vocab
+
+    Notes
+    -----
+    The vocab output can be used to encode several character dataset with
+    the same encoding.
+    """
+    print "-"*40
+    print "LOADING IMDB WORDS DATASET"
+    print "-"*40
+    from collections import Counter
+    import itertools
+    try:
+        import pandas as pd
+    except:
+        raise ImportError('Pandas is required')
+    regexp = re.compile(r'[^\x00-\x7F]+')
+
+    def clean(l):
+        l = re.sub(regexp,' ', l)
+        l = l.replace(unichr(163), '')
+        l = l.replace("\t", '')
+        for c in '$!"#%&()*+-./:;<>=?@[]^_{}|~,\\'+'"`':
+            l = l.replace(c, " "+c+" ")
+        for i in "'":
+            l = l.replace(i, '')
+        l = re.sub(' +',' ', l)
+        l = l.rstrip()
+        l = l.lower()
+        return l
+
+    (train_pos_lst, train_neg_lst, train_unsup_lst,
+     test_pos_lst, test_neg_lst) = load_imdb(dataset, clean)
+
+    all_lst = (train_pos_lst + train_neg_lst + test_pos_lst +
+               test_neg_lst + train_unsup_lst)
+
+    if isinstance(vocab_size, (int, str)):
+        # join all data and split into a single large list of words
+        all_lst_split_chain = itertools.chain(*[l.split(" ") for l in all_lst])
+        words_counts = Counter(all_lst_split_chain)
+        words_counts_sorted = sorted(
+            words_counts.items(), key=lambda x:x[1], reverse=True)
+
+        words, counts = zip(*words_counts_sorted)
+
+        if vocab_size == 'once':
+            vocab_size = np.sum(np.array(counts) > 1)
+        below_cutoff_words = words[vocab_size:vocab_size+5]
+        below_cutoff_counts = counts[vocab_size:vocab_size+5]
+        words = words[:vocab_size]
+        counts = counts[:vocab_size]
+
+
+
+        print "Using VOCAB with the %i most frequent words" % vocab_size
+        print "-"*40
+        print "Top counts   "
+        print "-"*40
+        for w, c in zip(words[:10], counts[:10]):
+            print w, c
+        print "-"*40
+        print "bottom counts"
+        print "-"*40
+        for w, c in zip(words[-10:], counts[-10:]):
+            print w, c
+        print "<----CUTOFF"
+        for w, c in zip(below_cutoff_words[-20:],
+                        below_cutoff_counts[-20:]):
+            print w, c
+
+        print "-"*40
+        vocab = words[:vocab_size]
+        char2idx = {char: idx for idx, char in enumerate(vocab)}
+        unk_idx = max(char2idx.values()) + 1
+    elif isinstance(vocab_size, str):
+        vocab = vocab_size
+        char2idx = {char:idx for idx, char in enumerate(vocab_size)}
+        unk_idx = max(char2idx.values()) + 1
+    else:
+        raise ValueError('Vocab must be integer, "once" or a list of words')
+
+    train_pos_lst_words = [l.split(' ') for l in train_pos_lst]
+    train_neg_lst_words = [l.split(' ') for l in train_neg_lst]
+    train_unsup_lst_words = [l.split(' ') for l in train_unsup_lst]
+    test_pos_lst_words = [l.split(' ') for l in test_pos_lst]
+    test_neg_lst_words = [l.split(' ') for l in test_neg_lst]
+
+    # find maximum sequence length
+    seq_lens = map(
+        len, (train_pos_lst_words + train_neg_lst_words +
+              train_unsup_lst_words + test_pos_lst_words + test_neg_lst_words))
+    max_len = max(seq_lens)
+
+    train_X_pos, train_y_pos, train_mask_pos = _create_matrix(
+        train_pos_lst_words, 1, char2idx, max_len, unk_idx)
+    train_X_neg, train_y_neg, train_mask_neg = _create_matrix(
+        train_neg_lst_words, 0, char2idx, max_len, unk_idx)
+    X_train = np.concatenate([train_X_pos, train_X_neg], axis=0)
+    y_train = np.concatenate([train_y_pos, train_y_neg], axis=0)
+    mask_train = np.concatenate([train_mask_pos, train_mask_neg])
+
+    X_unsup_train, _, mask_unsup_train = _create_matrix(
+        train_unsup_lst_words, -1, char2idx, max_len, unk_idx)
+
+    test_X_pos, test_y_pos, test_mask_pos = _create_matrix(
+        test_pos_lst_words, 1, char2idx, max_len, unk_idx)
+    test_X_neg, test_y_neg, test_mask_neg = _create_matrix(
+        test_neg_lst_words, 0, char2idx, max_len, unk_idx)
+    X_test = np.concatenate([test_X_pos, test_X_neg], axis=0)
+    y_test = np.concatenate([test_y_pos, test_y_neg], axis=0)
+    mask_test = np.concatenate([test_mask_pos, test_mask_neg])
+
+    #################
+    # Do filtering
+    #################
+    print "-"*40
+    print "Minium length filter :", minimum_len
+    print "Maximum length filter:", maximum_len
+    if minimum_len is not None:
+        seq_lens = mask_train.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        print "Seqs below minimum   : %i" % np.invert(keep).sum()
+        X_train = X_train[keep, :]
+        y_train = y_train[keep]
+        mask_train = mask_train[keep, :]
+
+        seq_lens = mask_train.sum(axis=1)
+        keep = seq_lens >= minimum_len
+        X_unsup_train = X_unsup_train[:keep]
+        mask_unsup_train = mask_unsup_train[:keep]
+
+    if maximum_len is not None:
+        seq_lens = mask_train.sum(axis=1)
+        keep = seq_lens <= minimum_len
+        print "Seqs above maximum   : %i" % np.invert(keep).sum()
+        X_train = slice_masked_seq(X_train, mask_train, maximum_len)
+        mask_train = slice_masked_seq(mask_train, mask_train, maximum_len)
+        X_unsup_train = slice_masked_seq(
+            X_unsup_train, mask_unsup_train, maximum_len)
+        mask_unsup_train = slice_masked_seq(
+            mask_unsup_train, mask_unsup_train, maximum_len)
+        X_test = slice_masked_seq(X_test, mask_test, maximum_len)
+        mask_test = slice_masked_seq(mask_test, mask_test, maximum_len)
+
+    np.random.seed(seed)
+    p = np.random.permutation(X_train.shape[0])
+    X_train = X_train[p]
+    y_train = y_train[p]
+    mask_train = mask_train[p]
+
+    seq_lens = mask_train.sum(axis=1).astype('int32')
+    print "train X              :", X_train.shape, X_train.dtype
+    print "train y              :", y_train.shape, y_train.dtype
+    print "train mask           :", mask_train.shape, mask_train.dtype
+    print "unsup X              :", X_unsup_train.shape, X_unsup_train.dtype
+    print "unsup mask           :", mask_unsup_train.shape, \
+        mask_unsup_train.dtype
+    print "test X               :", X_test.shape, X_test.dtype
+    print "test y               :", y_test.shape, y_test.dtype
+    print "test mask            :", mask_test.shape, mask_test.dtype
+    print "MIN length           : ", seq_lens.min()
+    print "MAX length           : ", seq_lens.max()
+    print "MEAN length          : ", seq_lens.mean()
+    print "num UNKOWN Words     : ", np.sum(X_train == unk_idx)
+    print "num targets          :", np.sum(np.max(y_train))+1
+    print "-"*40
+
+    return (X_train, y_train, mask_train,
+            X_unsup_train, mask_unsup_train,
+            X_test, y_test, mask_test,
+            vocab)
+
+
 if __name__ == "__main__":
-    out = load_svhn()
+    #out = load_svhn()
+    out = load_rotten_tomatoes_character()
+    del out
+    out = load_rotten_tomatoes_words()
+    del out
+    out = load_imdb_character()
+    del out
+    out = load_imdb_words()
+    del out
     print "done"
